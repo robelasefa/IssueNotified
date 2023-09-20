@@ -89,13 +89,14 @@ class BotDeveloper:
             time_diff = TWELVE_HOURS - (current_time - last_time)
             hours_left =  time_diff // ONE_HOUR
             minutes_left = (time_diff % ONE_HOUR) // 60
-            untimedMessage = f"""Hi Coder!
+            HI_EMOJI = "\U0001F44B"
+            untimedMessage = f"""{HI_EMOJI} Hi Coder!
              \nIt looks like you've requested a report less than 12 hours ago. \
 Please come back in {hours_left} hours {minutes_left} minutes to check for a new report."""
             devMsg = untimedMessage
 
         self.updater.bot.send_message(chat_id=developer_id, text=devMsg)
-        self.user_feedbacks = []  # Clear the list after submitting the new feedback
+        self.user_feedbacks.clear()  # Clear the list after submitting the new feedback
 
     def new_features(self, InfoMsg):
         """Notify users about the improvement made to the bot."""
@@ -131,10 +132,5 @@ Please come back in {hours_left} hours {minutes_left} minutes to check for a new
     #     self.cur.execute("""CREATE TABLE IF NOT EXISTS messages (
     #         user_id INT,
     #         message_sent INT DEFAULT 0);""")
-    def no_of_users(self):
-        """Get the number of users from the database."""
-        with open("user_data.json", "r") as file:
-            userData = json.load(file)
-            number = len(userData)
 
     
