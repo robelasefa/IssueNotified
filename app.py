@@ -40,6 +40,11 @@ if not oldIssuePath.exists():
     with open(oldIssuePath, "w") as file:
         json.dump([], file, indent=2)
 
+# Check for bot new features and send messages only once
+is_sent = True
+if is_sent:
+    dev.new_features(sensitives.MESSAGE1)
+    is_sent = False
 
 class botExceptions(Exception):
     """A bot exception class to indicate error when something went wrong."""

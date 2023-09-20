@@ -8,3 +8,24 @@ COMMUNICATION_CODE = 'The king is back!'
 HUNDRED_POINTS = "\U0001F4AF"
 CHECK_MARK_EMOJI = chr(0x2705)
 CROSS_MARK_EMOJI = chr(0x274C)
+"👋"	"\U0001F44B"
+"🐛"	"\U0001F41B"
+"🤯"	"\U0001F92F"
+"🔧"	"\U0001F527"
+"🚀"	"\U0001F680"
+"📄"	"\U0001F4C4"
+"🤖"	"\U0001F916"
+"👍"	"\U0001F44D"
+"💬"	"\U0001F4AC"
+"🙏"	"\U0001F64F"
+
+# Update messages to send to users
+MESSAGE1 = f"""
+\U0001F44B Hi everyone,
+
+We're so sorry for the bugs in our bot lately. We know they've been frustrating \U0001F92F, and we appreciate your patience as we worked to fix them.
+
+We're happy to announce that we've made some improvements and bug fixes, and our bot is now running smoothly again \U0001F680! You can now receive timely updates on your favorite repositories with ease!
+
+Thank you for choosing our bot \U0001F916 . We're always looking for ways to improve, so please don't hesitate to share any feedback or questions in the comments section \U0001F4AC.
+""" 

@@ -3,9 +3,10 @@ from pathlib import Path
 from datetime import datetime
 import time
 import json
+import sqlite3
 
 class BotDeveloper:
-    """A sample BotDeveloper class"""
+    """A sample BotDeveloper class."""
     def __init__(self, updater):
         self.updater = updater
         self.users = 0
@@ -15,6 +16,8 @@ class BotDeveloper:
         self.repo_owners = []
         self.user_feedbacks = []
         self.timePath = Path('last_notification_time.txt')
+        self.conn = sqlite3.connect("users.db")
+        self.cur = self.conn.cursor()
 
     def _read_last_notification_time(self):
         if self.timePath.exists():
@@ -92,12 +95,39 @@ Please come back in {hours_left} hours {minutes_left} minutes to check for a new
         self.updater.bot.send_message(chat_id=developer_id, text=devMsg)
         self.user_feedbacks = []  # Clear the list after submitting the new feedback
 
-    def bot_updates(self, updateInfoMsg):
+    def new_features(self, InfoMsg):
         """Notify users about the improvement made to the bot."""
         with open("user_data.json", "r") as file:
             userData = json.load(file)
-            userIds = [user["user_id"] for user in userData]
 
-            for user_id in userIds:
-                self.updater.bot.send_message(chat_id=user_id, text=updateInfoMsg)
+        for user in userData:
+           self.updater.bot.send_message(chat_id=user["user_id"], text=InfoMsg)
+    
+    # def database(self):
+        #         # Update the database to indicate that the message has been sent to all users
+        # self.cur.execute("UPDATE users SET message_sent = 1 WHERE message_sent = 0")
+
+        # # Insert the user IDs into the database(if it doesn't exists already)
+        # for user in user_data:
+        #     self.cur.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user["user_id"],))
+
+        # # Get all users who have not yet received the message
+        # self.cur.execute("SELECT user_id FROM messages WHERE message_sent = 0")
+        # users = self.cur.fetchall()
+
+        # # Loop through the users and send the message
+        # 
+
+        # # Commit the changes
+        # self.conn.commit()
+
+    #     self._create_table()
+
+    # def _create_table(self):
+    #     """Create a database table to record user ID and message sent status."""
+    #     # Create the database table if it doesn't exist
+    #     self.cur.execute("""CREATE TABLE IF NOT EXISTS messages (
+    #         user_id INT,
+    #         message_sent INT DEFAULT 0);""")
+
     
