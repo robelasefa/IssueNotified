@@ -25,7 +25,8 @@ def prompt_repo_to_untrack(update, context):
             update.message.reply_text(text='Which repository do you want to untrack?', reply_markup=InlineKeyboardMarkup(untracking_inline_keyboard))
         else:
             update.message.reply_text("You have no repositories to stop receiving notifications from.")
-
+            
+    return 3 # This returns the untrack() function
 
 
 def untrack(update, context):
@@ -58,6 +59,7 @@ def untrack(update, context):
 def untrack_all(update, context):
     """Delete all repositories from tracking list."""
     user_id = update.callback_query.from_user.id
+
     with userDataPath.open(mode='r+') as file:
         userData = json.load(file)
 

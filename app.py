@@ -186,69 +186,71 @@ def track(update, context):
 def prompt_repo_to_untrack(update, context):
     """Prompts the user to select a repository to cease tracking."""
     CROSS_MARK_EMOJI = chr(0x274C)
-    untrack_all_button = InlineKeyboardButton(text=f'{CROSS_MARK_EMOJI} Remove all', callback_data='untrack_all_callback_data')
-    reply_markup_2 = InlineKeyboardMarkup([[untrack_all_button]])
+    user_id = update.message.from_user.id
 
-    prompt_repo_msg = "Enter the name and owner of the repository you want to terminate watching."
-    update.message.reply_text(text=prompt_repo_msg, reply_markup=reply_markup_2)
+    with userDataPath.open(mode='r') as file:
+        userData = json.load(file)
+        repoDictList = next((user['data'] for user in userData if user['user_id'] == user_id), None)
 
+        if repoDictList is not None:
+            repoList = [repo for repoDict in repoDictList for repo in repoDict.values()]
+            untracking_inline_keyboard = []  # Create a list of inline buttons, one button for each repository in the user's tracking list.
+            
+            for repo in repoList:
+                untracking_inline_keyboard.append([InlineKeyboardButton(text=repo, callback_data='untrack_repo:' + repo)])
+            untracking_inline_keyboard.append([InlineKeyboardButton(text=f'{CROSS_MARK_EMOJI} Remove all', callback_data='untrack_all_repo')])
+
+            # Send a message to the user with the list of inline buttons.
+            update.message.reply_text(text='Which repository do you want to untrack?', reply_markup=InlineKeyboardMarkup(untracking_inline_keyboard))
+        else:
+            update.message.reply_text("You have no repositories to stop receiving notifications from.")
+            
     return 3 # This returns the untrack() function
 
 def untrack(update, context):
     """Remove the repository the user wants to cease tracking."""
-    untrack_repo = update.message.text
-    user_id = update.message.from_user.id
+    user_id = update.callback_query.from_user.id
+    repo_name = update.callback_query.data.split(':')[1]  # Get the repository name from the callback data.
 
     with userDataPath.open(mode='r+') as file:
         userData = json.load(file)
-        userRepos = [user['data'] for user in userData if user['user_id'] == user_id]
+        repoDictList = [user['data'] for user in userData if user['user_id'] == user_id]
 
-        pattern = r'^[a-zA-Z0-9_-]+,\s[a-zA-Z0-9_-]+$'
+        for Dict in repoDictList:
+            if repo_name in Dict.values():
+                repoDict = Dict
+                break
+        repoDictList.remove(repoDict)
         
-        if re.match(pattern, untrack_repo):
-            repo_owner, repo_name = untrack_repo.split(", ")
-            repoDict = {repo_owner: repo_name}
+        if not repoDictList:  # Verify whether the user has any repositories for tracking future issues, and if not, delete the user's information from the database.
+            for user in userData:
+                if user['user_id'] == user_id:
+                    userData.remove(user)
 
-            if user_id not in [user["user_id"] for user in userData]:  # Check if the user is using the bot 
-                msg = f"You have no repositories to stop receiving notifications from."
-            elif repoDict not in userRepos:   # Check if the repository to be removed exists
-                msg = f"I couldn't find a repository named '{repo_name}' that you've tracked before."
-            else:
-                userRepos.remove(repoDict)
-                # Verify whether the user has any repositories for tracking future issues, and if not,
-                #  delete the user's information from the database.
-                if not userRepos:
-                    for user in userData:
-                        if user['user_id'] == user_id:
-                            userData.remove(user)
-                msg = f"Your repository has been removed from tracking."   
-        else:
-            msg = "Please be sure to use this format: <owner_name>, <repository_name>."
         file.seek(0)  # Move the file pointer to the beginning of the file
         json.dump(userData, file, indent=4)  # Write the updated data back to the file
         file.truncate()  # Truncate any remaining content in the file
 
-    update.message.reply_text(msg)
+    # Send a message to the user confirming that the repository has been removed from their tracking list.
+    updater.bot.send_message(chat_id=user_id, text='The repository {} has been removed from your tracking list.'.format(repo_name))
     return ConversationHandler.END
 
 def untrack_all(update, context):
     """Delete all repositories from tracking list."""
-    # Get the chat ID of the user who clicked the inline button
     user_id = update.callback_query.from_user.id
+
     with userDataPath.open(mode='r+') as file:
         userData = json.load(file)
-        if user_id not in [user["user_id"] for user in userData]:  # Check if the user is using the bot 
-            deleteMsg = f"You have no repositories to stop receiving notifications from."
-        else:
-            for user in userData: # Remove user from the database
-                if user['user_id'] == user_id:
-                    userData.remove(user)
-            deleteMsg = "All clear! You have now untracked all of your repositories."    
+
+        for user in userData: # Remove user from the database, since they have no any remaining repository to keep notifying them. 
+            if user['user_id'] == user_id:
+                userData.remove(user)
+
         file.seek(0)  # Move the file pointer to the beginning of the file
         json.dump(userData, file, indent=4)  # Write the updated data back to the file
         file.truncate()  # Truncate any remaining content in the file
 
-    updater.bot.send_message(chat_id=user_id, text=deleteMsg)
+    updater.bot.send_message(chat_id=user_id, text="All clear! You have now untracked all of your repositories." )
 
 def list_repos(update, context):
     """Show the repositories the user has subscribed to."""
