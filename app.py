@@ -212,8 +212,8 @@ def untrack(update, context):
 
             if user_id not in [user["user_id"] for user in userData]:  # Check if the user is using the bot 
                 msg = f"You have no repositories to stop receiving notifications from."
-            elif not any(repoDict == dictionary for dictionary in userRepos):   # Check if the repository to be removed exists
-                msg = f"I couldn't find a repository named '{repo_owner}' that you've tracked before."
+            elif repoDict not in userRepos:   # Check if the repository to be removed exists
+                msg = f"I couldn't find a repository named '{repo_name}' that you've tracked before."
             else:
                 userRepos.remove(repoDict)
                 # Verify whether the user has any repositories for tracking future issues, and if not,
@@ -230,7 +230,7 @@ def untrack(update, context):
         json.dump(userData, file, indent=4)  # Write the updated data back to the file
         file.truncate()  # Truncate any remaining content in the file
 
-    update.message.reply_text(text=msg)
+    update.message.reply_text(msg)
     return ConversationHandler.END
 
 def untrack_all(update, context):
