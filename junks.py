@@ -25,21 +25,70 @@
     #         user_id INT,
             # message_sent INT DEFAULT 0);""")
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # def untrack(bot, update):
-
-
-# #   # Get the repository name from the callback data.
-# #   repository_name = update.callback_query.data.split(':')[1]
 
 # #   # Remove the repository from the user's tracking list.
 # #   user_id = update.callback_query.from_user.id
 # #   user_data = load_user_data(user_id)
 # #   repositories = user_data['repositories']
 # #   repositories.remove(repository_name)
-# #   save_user_data(user_id, user_data)
 
-# #   # Send a message to the user confirming that the repository has been removed from their tracking list.
-# #   updater.bot.send_message(user_id, 'The repository {} has been removed from your tracking list.'.format(repository_name))
+
+import json
+userDataPath = None
+def save_user_data(user_id, mode="w"):
+    with userDataPath.open(mode='r') as file:
+        userData = json.load(file)
+        repoDictList = [user['data'] for user in userData if user['user_id'] == user_id]
+
+def load_user_data(user_id):
+   with userDataPath.open(mode='r') as file:
+        userData = json.load(file)
+        repoDictList = next((user['data'] for user in userData if user['user_id'] == user_id), None)
+   return repoDictList
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -47,11 +96,6 @@
 
 # def untrack_repo_from_json(user_id, repository_name):
 #   """Removes a repository from the user's tracking list in the JSON file.
-
-#   Args:
-#     user_id: The ID of the user.
-#     repository_name: The name of the repository to untrack.
-#   """
 
 #   user_data = load_user_data(user_id)
 #   repositories = user_data['repositories']
@@ -61,52 +105,12 @@
 # def untrack_repo_callback(bot, update):
 #   """Handles inline button clicks to untrack repositories.
 
-#   Args:
-#     bot: The Telegram bot.
-#     update: The Telegram update.
-#   """
-
 #   repository_name = update.callback_query.data.split(':')[1]
 #   untrack_repo_from_json(update.callback_query.from_user.id, repository_name)
 
 #   # Send a confirmation message to the user.
 #   bot.send_message(update.callback_query.from_user.id, 'The repository {} has been untracked.'.format(repository_name))
 
-# def untrack_repos(bot, update):
-#   """Sends a message to the user with a list of inline buttons to untrack repositories.
-
-#   Args:
-#     bot: The Telegram bot.
-#     update: The Telegram update.
-#   """
-
-#   user_id = update.message.from_user.id
-#   user_data = load_user_data(user_id)
-#   repositories = user_data['repositories']
-
-#   # Create a list of inline buttons, one button for each repository in the user's tracking list.
-#   inline_buttons = []
-#   for repository in repositories:
-#     inline_buttons.append([InlineKeyboardButton(repository, callback_data='untrack_repo:' + repository)])
-
-# #   # Send a message to the user with the list of inline buttons.
-# #   bot.send_message(user_id, 'Which repository do you want to untrack?', reply_markup=InlineKeyboardMarkup(inline_buttons))
-
-
-
-# #def delete_repo_callback(bot, update):
-# #   """Handles inline button clicks to delete repositories.
-
-# #   Args:
-# #     bot: The Telegram bot.
-# #     update: The Telegram update.
-# #   """
-
-# #   repository_name = update.callback_query.data.split(':')[1]
-# #   delete_repo_from_json(update.callback_query.from_user.id, repository_name)
-
-# #   # Send a confirmation message to the user.
-# #   bot.send_message(update.callback_query.from_user.id, 'The repository {} has been deleted.'.format(repository_name))
 
 # # def delete_repos(bot, update):
 # #   """Sends a message to the user with a list of inline buttons to delete repositories.
@@ -116,17 +120,6 @@
 # #     update: The Telegram update.
 # #   """
 
-# #   user_id = update.message.from_user.id
-# #   user_data = load_user_data(user_id)
-# #   repositories = user_data['repositories']
-
-# #   # Create a list of inline buttons, one button for each repository in the user's tracking list.
-# #   inline_buttons = []
-# #   for repository in repositories:
-# #     inline_buttons.append([InlineKeyboardButton(repository, callback_data='delete_repo:' + repository)])
-
-# #   # Send a message to the user with the list of inline buttons.
-# #   bot.send_message(user_id, 'Which repository do you want to delete?', reply_markup=InlineKeyboardMarkup(inline_buttons))
 
 
 

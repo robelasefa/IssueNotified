@@ -8,7 +8,6 @@ class BotDeveloper:
     """A sample BotDeveloper class."""
     def __init__(self, updater):
         self.updater = updater
-        self.successful_issues = 0
         self.invalid_inputs = 0
         self.active_users = []
         self.repo_owners = []
@@ -28,8 +27,20 @@ class BotDeveloper:
     def _parse_timestamp(self, timestamp):
         self.formatted_time = datetime.fromtimestamp(timestamp).strftime("%b %d, %Y %H:%M")
         return self.formatted_time
+    
+    def _read_number_of_users(self):
+        with open("user_data.json", "r") as file:
+            userData = json.load(file)
+            users = len(userData)
+        return users
+    
+    def _read_number_of_issues(self):
+        with open("old_issue.json", "r") as file:
+            oldIssue = json.load(file)
+            issues = len(oldIssue)
+        return issues
 
-    def _orgranize_bot_info(self, last_time, users):
+    def _orgranize_bot_info(self, last_time, users, issues):
         """"""
         self.counted_users = Counter(self.active_users)
         self.counted_owners = Counter(self.repo_owners)
@@ -39,16 +50,16 @@ class BotDeveloper:
         BOT_EMOJI = '\U0001F916'
         msgTitle = f"\t{BOT_EMOJI} Here is the Bot Usage Report since {last_time}:\n\n"
         msgA = f"Number of bot users:\t\t{users}\n"
-        msgB = f"Number of successful issues:\t\t{self.successful_issues}\n"
+        msgB = f"Number of successful issues:\t\t{issues}\n"
         msgC = f"Number of invalid inputs:\t\t{self.invalid_inputs}\n"
 
-        if len(self.top_5_users) >= 5:
+        if len(self.active_users) >= 5:
             msgD = "Top 5 most active bot users:\n"
             for user in self.top_5_users:
                 msgD += "  Name: {}\t\tUsage: {}\n".format(user[0], user[1])
         else:
             msgD = '---\n'
-        if len(self.top_5_owners) >= 5:
+        if len(self.repo_owners) >= 5:
             msgE = "Top 5 most popular repository owners:\n"
             for owner in self.top_5_owners:
                 msgE += "  Name: {}\t\tAsked: {}\n".format(owner[0], owner[1])
@@ -75,7 +86,11 @@ class BotDeveloper:
             userData = json.load(file)
             users = len(userData)
         last_time = self._read_last_notification_time()
-        composedMessage = self._orgranize_bot_info(self._parse_timestamp(last_time), users)
+        formatted_time = self._parse_timestamp(last_time)
+        number_of_users = self._read_number_of_users()
+        number_of_issues = self._read_number_of_issues()
+
+        composedMessage = self._orgranize_bot_info(formatted_time, number_of_users, number_of_issues)
         current_time = int(time.time())
 
         if current_time - last_time >= TWELVE_HOURS:  # Notify once per 12 hour

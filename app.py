@@ -129,7 +129,6 @@ def get_issues(repo_owner, repo_name):
                                     \n-------------------------------------- \
                                     \n\n{issue_title}"
                         oldIssue(issue_id)
-                        dev.successful_issues += 1
                         dev.repo_owners.append(repo_owner)
                         return issue_str, reply_markup_1
                     else:
@@ -196,7 +195,7 @@ def prompt_repo_to_untrack(update, context):
     return 3 # This returns the untrack() function
 
 def untrack(update, context):
-    """Remomve the repository the user wants to cease tracking."""
+    """Remove the repository the user wants to cease tracking."""
     untrack_repo = update.message.text
     user_id = update.message.from_user.id
 
@@ -289,7 +288,7 @@ def process_feedback(update, context):
     update.message.reply_text("Thank you for taking time to share your thoughts with us!")
     return ConversationHandler.END
 
-def notify():
+def send_notification():
     """Sends a notification to the user if there are any new issues in the repo."""
     with userDataPath.open(mode='r') as file:
         userData = json.load(file)
@@ -306,7 +305,7 @@ def notify():
                 else:
                     updater.bot.send_message(chat_id=items[2], text=new_issue, reply_markup=reply_markup_1, disable_web_page_preview=True)
 
-timer = threading.Timer(15 * 60, notify)  # Notify users every 15 minutes
+timer = threading.Timer(15 * 60, send_notification)  # Notify users every 15 minutes
 timer.start()
 
 def error_handler(update, context):
@@ -345,6 +344,7 @@ conv_handler3 = ConversationHandler(
         3: [MessageHandler(Filters.text, untrack)]
     },
     fallbacks=[CommandHandler('cancel', cancel)])
+
 
 # Command Handlers
 disp.add_handler(CommandHandler("start", start))
