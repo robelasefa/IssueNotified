@@ -25,32 +25,8 @@
     #         user_id INT,
             # message_sent INT DEFAULT 0);""")
 
-# def prompt_repo_to_untrack(user_id):
-#   """Prompts the user to select a repository to cease tracking.
-
-#   Args:
-#     user_id: The ID of the user.
-#   """
-
-#   # Get the list of repositories that the user is currently tracking.
-#   user_data = load_user_data(user_id)
-#   repositories = user_data['repositories']
-
-#   # Create a list of inline buttons, one button for each repository in the user's tracking list.
-#   inline_buttons = []
-#   for repository in repositories:
-#     inline_buttons.append([InlineKeyboardButton(repository, callback_data='untrack_repo:' + repository)])
-
-#   # Send a message to the user with the list of inline buttons.
-#   updater.bot.send_message(user_id, 'Select the repository you want to cease tracking:', reply_markup=InlineKeyboardMarkup(inline_buttons))
-
 # def untrack(bot, update):
-#   """Removes a repository from the user's tracking list.
 
-#   Args:
-#     bot: The Telegram bot.
-# #     update: The Telegram update.
-# #   """
 
 # #   # Get the repository name from the callback data.
 # #   repository_name = update.callback_query.data.split(':')[1]
@@ -63,7 +39,7 @@
 # #   save_user_data(user_id, user_data)
 
 # #   # Send a message to the user confirming that the repository has been removed from their tracking list.
-# #   bot.send_message(user_id, 'The repository {} has been removed from your tracking list.'.format(repository_name))
+# #   updater.bot.send_message(user_id, 'The repository {} has been removed from your tracking list.'.format(repository_name))
 
 
 

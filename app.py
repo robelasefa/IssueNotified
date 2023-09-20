@@ -185,7 +185,7 @@ def track(update, context):
     return ConversationHandler.END
 
 def prompt_repo_to_untrack(update, context):
-    """Ask the user to provide the name and owner of the repository that they don't want to be tracked."""
+    """Prompts the user to select a repository to cease tracking."""
     CROSS_MARK_EMOJI = chr(0x274C)
     untrack_all_button = InlineKeyboardButton(text=f'{CROSS_MARK_EMOJI} Remove all', callback_data='untrack_all_callback_data')
     reply_markup_2 = InlineKeyboardMarkup([[untrack_all_button]])
