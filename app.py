@@ -352,6 +352,7 @@ disp.add_handler(CommandHandler("list", list_repos))
 
 # Callback query handlers
 disp.add_handler(CallbackQueryHandler(untrack_all, pattern='untrack_all_callback_data'))
+disp.add_handler(CallbackQueryHandler(untrack))
 
 # Conversational Handlers
 disp.add_handler(conv_handler1)

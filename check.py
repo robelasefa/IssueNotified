@@ -71,8 +71,6 @@ def untrack_all(update, context):
 
     updater.bot.send_message(chat_id=user_id, text="All clear! You have now untracked all of your repositories." )
 
-# disp.add_handler(CallbackQueryHandler(untrack, pattern='untrack'))
-
 # def confirm_untrack(update, context):
 #     """Handler function for confirmationnof untracking."""
 #     user_id = update.effective_user.id
