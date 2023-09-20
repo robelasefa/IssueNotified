@@ -149,7 +149,7 @@ def track(update, context):
     global repo_owner, repo_name
 
     user_input = update.message.text
-    user_id = update.message.chat_id
+    user_id = update.message.from_user.id
 
     if user_id in sensitives.DEVELOPERS.values() and update.message.text == sensitives.COMMUNICATION_CODE:
         dev.notify_developer(user_id)
