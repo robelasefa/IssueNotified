@@ -222,8 +222,7 @@ def untrack(update, context):
                     for user in userData:
                         if user['user_id'] == user_id:
                             userData.remove(user)
-                msg = f"Your repository has been removed from tracking."
-        
+                msg = f"Your repository has been removed from tracking."   
         else:
             msg = "Please be sure to use this format: <owner_name>, <repository_name>."
         file.seek(0)  # Move the file pointer to the beginning of the file
@@ -260,13 +259,13 @@ def list_repos(update, context):
         if not user_id in [user["user_id"] for user in userData] or not [user['data'] for user in userData if user['user_id'] == user_id]:
             msg = f"Your repository list is empty."
         else:
-            msg = 'Owner\t\t\t\t\t\tRepository'
+            msg = 'Owner\t\t\t\t\t\t\tRepository'
             repoDictList = next((user['data'] for user in userData if user['user_id'] == user_id), None)
             if repoDictList is not None:
                 counter = 1
                 for repoDict in repoDictList:
                     for owner, repo in repoDict.items():
-                        msg += f"\n{counter}. {owner}\t\t\t\t\t\t{repo}"
+                        msg += f"\n{counter}. {owner}\t\t\t\t\t\t\t{repo}"
                         counter += 1
             else:
                 msg = "Something went wrong. Please try again."
@@ -295,12 +294,12 @@ def notify():
     with userDataPath.open(mode='r') as file:
         userData = json.load(file)
         if userData:
-            iterableData = [(owner, repo, user['user_id']) for user in userData for repoDictist in user['data'] for owner, repo in repoDictist.items()]
+            iterableData = [(owner, repo, user['user_id']) for user in userData for repoDict in user['data'] for owner, repo in repoDict.items()]
             for items in iterableData:
                 new_issue, reply_markup_1 = get_issues(items[0], items[1])
                 
                 if new_issue is None:
-                    noRepoFound = f"There is no repository called '{repo_name}' under the ownership of '{repo_owner}'."
+                    noRepoFound = f"There is no repository called '{items[1]}' under the ownership of '{repo_owner}'."
                     updater.bot.send_message(chat_id=items[2], text=noRepoFound)
                     remove_repo(items[2], {items[0]: items[1]})
                     dev.invalid_inputs += 1
@@ -312,7 +311,7 @@ timer.start()
 
 def cancel():
     """Conclude the conversation."""
-    pass
+    pass  # Do nothing
 
 # This will manage the conversation to track new repository.
 conv_handler1 = ConversationHandler(
@@ -329,6 +328,7 @@ conv_handler2 = ConversationHandler(
         2: [MessageHandler(Filters.text, process_feedback)]
     },
     fallbacks=[CommandHandler('cancel', cancel)])
+
 # This will manage the conversation to track new repository.
 conv_handler3 = ConversationHandler(
     entry_points=[CommandHandler('untrack', prompt_repo_to_untrack)],

@@ -3,7 +3,6 @@ from pathlib import Path
 from datetime import datetime
 import time
 import json
-import sqlite3
 
 class BotDeveloper:
     """A sample BotDeveloper class."""
@@ -15,8 +14,6 @@ class BotDeveloper:
         self.repo_owners = []
         self.user_feedbacks = []
         self.timePath = Path('last_notification_time.txt')
-        self.conn = sqlite3.connect("users.db")
-        self.cur = self.conn.cursor()
 
     def _read_last_notification_time(self):
         if self.timePath.exists():
@@ -84,19 +81,19 @@ class BotDeveloper:
         if current_time - last_time >= TWELVE_HOURS:  # Notify once per 12 hour
             devMsg = composedMessage
             self._write_last_notification_time(current_time)
+            self.user_feedbacks.clear()  # Clear the list after submitting the new feedback
         else:
             # Do some math to calculate the time until the next report is available
             time_diff = TWELVE_HOURS - (current_time - last_time)
             hours_left =  time_diff // ONE_HOUR
             minutes_left = (time_diff % ONE_HOUR) // 60
             HI_EMOJI = "\U0001F44B"
-            untimedMessage = f"""{HI_EMOJI} Hi Coder!
+            untimedRequest = f"""{HI_EMOJI} Hi Coder!
              \nIt looks like you've requested a report less than 12 hours ago. \
-Please come back in {hours_left} hours {minutes_left} minutes to check for a new report."""
-            devMsg = untimedMessage
+Please come back in {hours_left} hours and {minutes_left} minutes to check for a new report."""
+            devMsg = untimedRequest
 
         self.updater.bot.send_message(chat_id=developer_id, text=devMsg)
-        self.user_feedbacks.clear()  # Clear the list after submitting the new feedback
 
     def new_features(self, InfoMsg):
         """Notify users about the improvement made to the bot."""
@@ -106,31 +103,6 @@ Please come back in {hours_left} hours {minutes_left} minutes to check for a new
         for user in userData:
            self.updater.bot.send_message(chat_id=user["user_id"], text=InfoMsg)
     
-    # def database(self):
-        #         # Update the database to indicate that the message has been sent to all users
-        # self.cur.execute("UPDATE users SET message_sent = 1 WHERE message_sent = 0")
 
-        # # Insert the user IDs into the database(if it doesn't exists already)
-        # for user in user_data:
-        #     self.cur.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user["user_id"],))
-
-        # # Get all users who have not yet received the message
-        # self.cur.execute("SELECT user_id FROM messages WHERE message_sent = 0")
-        # users = self.cur.fetchall()
-
-        # # Loop through the users and send the message
-        # 
-
-        # # Commit the changes
-        # self.conn.commit()
-
-    #     self._create_table()
-
-    # def _create_table(self):
-    #     """Create a database table to record user ID and message sent status."""
-    #     # Create the database table if it doesn't exist
-    #     self.cur.execute("""CREATE TABLE IF NOT EXISTS messages (
-    #         user_id INT,
-    #         message_sent INT DEFAULT 0);""")
 
     
