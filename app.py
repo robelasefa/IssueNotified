@@ -198,7 +198,7 @@ def prompt_repo_to_untrack(update, context):
 def untrack(update, context):
     """Remomve the repository the user wants to cease tracking."""
     untrack_repo = update.message.text
-    user_id = update.message.chat_id
+    user_id = update.message.from_user.id
 
     with userDataPath.open(mode='r+') as file:
         userData = json.load(file)
@@ -236,8 +236,7 @@ def untrack(update, context):
 def untrack_all(update, context):
     """Delete all repositories from tracking list."""
     # Get the chat ID of the user who clicked the inline button
-    user_id = update.callback_query.message.chat.id
-
+    user_id = update.callback_query.from_user.id
     with userDataPath.open(mode='r+') as file:
         userData = json.load(file)
         if user_id not in [user["user_id"] for user in userData]:  # Check if the user is using the bot 
@@ -255,7 +254,7 @@ def untrack_all(update, context):
 
 def list_repos(update, context):
     """Show the repositories the user has subscribed to."""
-    user_id = update.message.chat_id
+    user_id = update.message.from_user.id
     with userDataPath.open(mode='r') as file:
         userData = json.load(file)
         if not user_id in [user["user_id"] for user in userData] or not [user['data'] for user in userData if user['user_id'] == user_id]:
