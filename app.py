@@ -152,7 +152,7 @@ def track(update, context):
     user_id = update.message.from_user.id
 
     if user_id in sensitives.DEVELOPERS.values() and update.message.text == sensitives.COMMUNICATION_CODE:
-        dev.notify_developer(user_id)
+        dev.notify_dev(user_id)
     else:
         pattern = r'^[a-zA-Z0-9_-]+,\s[a-zA-Z0-9_-]+$'
         if re.match(pattern, user_input):
@@ -274,7 +274,7 @@ def list_repos(update, context):
 def take_feedback(update, context):
     """"""
     update.message.reply_text("What steps can we take to enhance your interaction with our bot? \
-                              Please share your thoughts on your stay on the bot.")
+Please share your thoughts on your stay on the bot.")
     return 2  # This returns the process_feedback() function
 
 def process_feedback(update, context):
@@ -308,6 +308,15 @@ def notify():
 
 timer = threading.Timer(15 * 60, notify)  # Notify users every 15 minutes
 timer.start()
+
+def error_handler(update, context):
+    """Handles errors that occur during the bot's runtime."""
+    logger.error(context.error)
+
+    DEVELOPER_ID = sensitives.DEVELOPERS["DEVELOPER_ROBEL_ID"]
+
+    # Send a notification message to the bot's developer about the error.
+    updater.bot.send_message(chat_id=DEVELOPER_ID, text='An error occurred in the IssueNotified bot: {}'.format(context.error))
 
 def cancel():
     """Conclude the conversation."""
@@ -348,6 +357,9 @@ disp.add_handler(CallbackQueryHandler(untrack_all, pattern='untrack_all_callback
 disp.add_handler(conv_handler1)
 disp.add_handler(conv_handler2)
 disp.add_handler(conv_handler3)
+
+# This handles the errors occured during the bot's runtime
+disp.add_error_handler(error_handler)
 
 updater.start_polling()
 updater.idle()

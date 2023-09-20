@@ -68,7 +68,7 @@ class BotDeveloper:
         composedMessage = msgTitle + msgA + msgB + msgC + msgD + msgE + msgF
         return composedMessage
         
-    def notify_developer(self, developer_id):
+    def notify_dev(self, developer_id):
         ONE_HOUR = 3600
         TWELVE_HOURS = 12 * ONE_HOUR
         with open("user_data.json", "r") as file:
@@ -96,7 +96,7 @@ Please come back in {hours_left} hours and {minutes_left} minutes to check for a
         self.updater.bot.send_message(chat_id=developer_id, text=devMsg)
 
     def new_features(self, InfoMsg):
-        """Notify users about the improvement made to the bot."""
+        """Notify users about the improvements made to the bot."""
         with open("user_data.json", "r") as file:
             userData = json.load(file)
 
