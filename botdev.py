@@ -59,7 +59,8 @@ class BotDeveloper:
             msgF = f"You have {len(self.user_feedbacks)} new user feedbacks:"  # This last message has not \n.
             for feedback in self.user_feedbacks:
                 if type(feedback) is set:
-                    feedback = dict(feedback)  # Convert the set object to a dictionary object            
+                    feedback = dict(enumerate(feedback))  # Convert the set object to a dictionary object
+                    # with integer keys, assuming that there has been some error regarding the name of the user .            
                 for userName, feedbackMsg in feedback.items():
                     msgF += f"{userName}: \n\t'{feedbackMsg}'"
         else:
