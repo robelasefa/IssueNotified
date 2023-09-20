@@ -173,7 +173,6 @@ def track(update, context):
             with userDataPath.open(mode='r+') as file:
                 userData = json.load(file)
                 if not userData or not user_id in [user["user_id"] for user in userData]:
-                    dev.users += 1
                     dev.active_users.append(update.message.from_user.first_name)
                     userData.append(new_user)
                 else:

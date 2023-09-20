@@ -9,7 +9,6 @@ class BotDeveloper:
     """A sample BotDeveloper class."""
     def __init__(self, updater):
         self.updater = updater
-        self.users = 0
         self.successful_issues = 0
         self.invalid_inputs = 0
         self.active_users = []
@@ -33,7 +32,7 @@ class BotDeveloper:
         self.formatted_time = datetime.fromtimestamp(timestamp).strftime("%b %d, %Y %H:%M")
         return self.formatted_time
 
-    def _orgranize_bot_info(self, last_time):
+    def _orgranize_bot_info(self, last_time, users):
         """"""
         self.counted_users = Counter(self.active_users)
         self.counted_owners = Counter(self.repo_owners)
@@ -41,8 +40,8 @@ class BotDeveloper:
         self.top_5_owners = self.counted_owners.most_common(5)
 
         BOT_EMOJI = '\U0001F916'
-        msgTitle = f"\t{BOT_EMOJI} Here is the Bot Usage Report since {last_time}:\n"
-        msgA = f"Number of bot users:\t\t{self.users}\n"
+        msgTitle = f"\t{BOT_EMOJI} Here is the Bot Usage Report since {last_time}:\n\n"
+        msgA = f"Number of bot users:\t\t{users}\n"
         msgB = f"Number of successful issues:\t\t{self.successful_issues}\n"
         msgC = f"Number of invalid inputs:\t\t{self.invalid_inputs}\n"
 
@@ -75,8 +74,11 @@ class BotDeveloper:
     def notify_developer(self, developer_id):
         ONE_HOUR = 3600
         TWELVE_HOURS = 12 * ONE_HOUR
+        with open("user_data.json", "r") as file:
+            userData = json.load(file)
+            users = len(userData)
         last_time = self._read_last_notification_time()
-        composedMessage = self._orgranize_bot_info(self._parse_timestamp(last_time))
+        composedMessage = self._orgranize_bot_info(self._parse_timestamp(last_time), users)
         current_time = int(time.time())
 
         if current_time - last_time >= TWELVE_HOURS:  # Notify once per 12 hour
@@ -129,5 +131,10 @@ Please come back in {hours_left} hours {minutes_left} minutes to check for a new
     #     self.cur.execute("""CREATE TABLE IF NOT EXISTS messages (
     #         user_id INT,
     #         message_sent INT DEFAULT 0);""")
+    def no_of_users(self):
+        """Get the number of users from the database."""
+        with open("user_data.json", "r") as file:
+            userData = json.load(file)
+            number = len(userData)
 
     
