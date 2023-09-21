@@ -25,29 +25,6 @@
     #         user_id INT,
             # message_sent INT DEFAULT 0);""")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # def untrack(bot, update):
 
 # #   # Remove the repository from the user's tracking list.
@@ -55,44 +32,6 @@
 # #   user_data = load_user_data(user_id)
 # #   repositories = user_data['repositories']
 # #   repositories.remove(repository_name)
-
-
-import json
-userDataPath = None
-def save_user_data(user_id, mode="w"):
-    with userDataPath.open(mode='r') as file:
-        userData = json.load(file)
-        repoDictList = [user['data'] for user in userData if user['user_id'] == user_id]
-
-def load_user_data(user_id):
-   with userDataPath.open(mode='r') as file:
-        userData = json.load(file)
-        repoDictList = next((user['data'] for user in userData if user['user_id'] == user_id), None)
-   return repoDictList
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 # def untrack_repo_from_json(user_id, repository_name):
 #   """Removes a repository from the user's tracking list in the JSON file.

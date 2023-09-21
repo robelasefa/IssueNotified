@@ -190,39 +190,43 @@ def get_current_repos(user_id):
         return [repo for repoDict in repoDictList for repo in repoDict.values()]
     return None
 
-def send_inline_keyboard(user_id, repos):
+def get_inline_keyboard(repos):
     """Create the inline keyboard markup with user's repositories and send it to the user."""
     CROSS_MARK_EMOJI = chr(0x274C)
-    repo_buttons = [InlineKeyboardButton(text=repo, callback_data=repo) for repo in repos]
-    repo_buttons.append(InlineKeyboardButton(text=f'{CROSS_MARK_EMOJI} Remove all', callback_data='remove_all'))
-    keyboard = InlineKeyboardMarkup([repo_buttons])
+    repo_buttons = []
+    for repo in repos:
+        repo_button = InlineKeyboardButton(text=repo, callback_data=repo)
+        repo_buttons.append([repo_button])
+
+    remove_all_button = InlineKeyboardButton(text=f'{CROSS_MARK_EMOJI} Remove all', callback_data='remove_all')
+    cancel_button = InlineKeyboardButton(text='Cancel', callback_data='cancel')
+    repo_buttons.append([cancel_button, remove_all_button])
     
-    updater.bot.send_message(chat_id=user_id, text='Which repository do you want to untrack?', reply_markup=keyboard)
-   
+    keyboard = InlineKeyboardMarkup(repo_buttons)
+    return keyboard
+    
 def prompt_repo_to_untrack(update, context):
     """Prompts user to select a repository to cease tracking."""
     user_id = update.message.from_user.id
     repos = get_current_repos(user_id)
     if repos:
-        send_inline_keyboard(user_id, repos)
+        keyboard = get_inline_keyboard(repos)
+        update.message.reply_text(text='Which repository do you want to untrack?', reply_markup=keyboard)
     else:
         update.message.reply_text('You have no repositories to stop receiving notifications from.')
 
 def untrack_repo(user_id, repo):
     """Remove the specified repository from the user's list in the database."""
     userData = load_data(userDataPath)
-    repoDictList = [user['data'] for user in userData if user['user_id'] == user_id]
-    
-    # Remove the specified repository from the user's tracking list.
-    for Dict in repoDictList:
-        if repo in Dict.values():
-            repoDict = Dict
-            break
-    repoDictList.remove(repoDict)
-    # Verify whether the user has any repositories for tracking future issues.
     for user in userData:
         if user['user_id'] == user_id:
-            userData.remove(user)
+            for Dict in user['data']:  # Remove the specified repository from the user's tracking list.
+                if repo in Dict.values():
+                    repoDict = Dict
+                    user['data'].remove(repoDict)
+                    break         
+            if not user['data']:  # Verify whether the user has any repositories for tracking future issues.
+                userData.remove(user)
 
     save_data(userDataPath, userData)
 
@@ -240,14 +244,26 @@ def untrack_all_repos(user_id):
 def untrack_buttons_callback(update, context):
     query = update.callback_query
     user_id = query.from_user.id
-    if query.data == "remove_all":
+    message_id = query.message.message_id
+    
+    all_repo_removed_msg = "All clear! You have now untracked all of your repositories."
+    operation_cancelled_msg = 'Cancelled'
+
+    if query.data == "cancel":
+        query.edit_message_text(chat_id=user_id, message_id=message_id, text=operation_cancelled_msg, reply_markup=None)
+    elif query.data == "remove_all":
         untrack_all_repos(user_id)
-        query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))
-        updater.bot.send_message(chat_id=user_id, text="All clear! You have now untracked all of your repositories.")
+        query.edit_message_text(chat_id=user_id, message_id=message_id, text=all_repo_removed_msg, reply_markup=None)
     else:
         untrack_repo(user_id, query.data)
-        query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))
-        updater.bot.send_message(chat_id=user_id, text=f'The repository {query.data} has been removed from your tracking list.')
+        repos = get_current_repos(user_id)
+        repo_removed_msg = f'The repository {query.data} has been removed from your tracking list.'
+        if repos:
+            keyboard = get_inline_keyboard(get_current_repos(user_id))
+            query.edit_message_text(chat_id=user_id, message_id=message_id, text='Which repository do you want to untrack?', reply_markup=keyboard)
+            updater.bot.send_message(chat_id=user_id, text=repo_removed_msg)
+        else:
+            query.edit_message_text(chat_id=user_id, message_id=message_id, text=repo_removed_msg, reply_markup=None)    
 
 def list_repos(update, context):
     """Show the repositories the user has subscribed to."""
@@ -255,7 +271,7 @@ def list_repos(update, context):
     userData = load_data(userDataPath)
 
     if user_id not in [user["user_id"] for user in userData] or not [user['data'] for user in userData if user['user_id'] == user_id]:
-        msg = f"Your repository list is empty."
+        msg = "Your repository list is empty."
     else:
         msg = 'Owner\t\t\t\t\t\t\tRepository'
         repoDictList = next((user['data'] for user in userData if user['user_id'] == user_id), None)
@@ -280,14 +296,13 @@ def process_feedback(update, context):
     """Retrieve the user's feedback and send it to bot dev."""
     username =  update.message.from_user.username
     first_name = update.message.from_user.first_name
+    DEVELOPER_ID = sensitives.DEVELOPERS["DEVELOPER_ROBEL_ID"]
 
     name = username if username else first_name
     feedback = update.message.text
 
-    DEVELOPER_ID = sensitives.DEVELOPERS["DEVELOPER_ROBEL_ID"]
-    dev.send_feedbacks_to_dev([name, feedback], DEVELOPER_ID)
-
     update.message.reply_text("Thank you for taking time to share your thoughts with us!")
+    dev.send_feedbacks_to_dev([name, feedback], DEVELOPER_ID)
     return ConversationHandler.END
 
 def error_handler(update, context):
@@ -314,7 +329,7 @@ def send_notification():
                 remove_repo(items[2], {items[0]: items[1]})
                 dev.invalid_inputs += 1
             else:
-                updater.bot.send_message(chat_id=items[2], text=new_issue, reply_markup=reply_markup, disable_web_page_preview=True)
+                updater.bot.send_message(chat_id=items[2], text=new_issue, reply_markup=reply_markup, disable_web_page_preview=True, disable_notification=False)
 
 def cancel():
     """Conclude the conversation."""

@@ -45,6 +45,7 @@ We're happy to announce that we've made some improvements and bug fixes, and our
 Thank you for choosing our bot \U0001F916 . We're always looking for ways to improve, so please don't hesitate to share any feedback or questions in the comments section \U0001F4AC.
 """
 
+# This is the update message for my IssueNotified bot that is written to be sent to all users of the bot. But, when I prepare the message I forgot to include that the bot can now quickly send issue notifications with sound to their device, so that the users can get alerted to new messages and they will not miss updates. This helps them to respond in a timely manner. Could you please update the message in a way it includes this information?
 MESSAGE2 = f"""
 \U0001F389 \U0001F680 IssueNotified Bot Update!  \U0001F389 \U0001F680
 
