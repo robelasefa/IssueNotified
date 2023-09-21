@@ -50,6 +50,7 @@ def start(update, context):
 \n\nWe are excited to have you join us on this journey with IssueNotified bot, your personal assistant for GitHub repositories.
 With our stunning and timely notifications, you'll always be the first to know about any new issues.
 Just type /track and let us take care of the rest."""
+    
     update.message.reply_text(welcome_msg)
 
 class botExceptions(Exception):
@@ -63,35 +64,39 @@ def notify_new_features(update_message):
         dev.new_features(update_message)
         is_sent = False
 
+def load_data(filename, mode='r'):
+    """Load the file in the specified filepath and return it."""
+    with filename.open(mode) as file:
+        return json.load(file)
+    
+def save_data(filename, data, indent=4, mode='w'):
+    """Write the updated data back to the file."""
+    with filename.open(mode) as file:
+        json.dump(data, file, indent=indent)
+
 def old_issue(issue_id):
     """Delete the reported or old issue."""
-    with oldIssuePath.open(mode='r') as file:
-        oldIssue = json.load(file)
-        oldIssue.append(issue_id)
-
-    with open(oldIssuePath, "w") as file:
-        json.dump(oldIssue, file, indent=2)
+    oldIssue = load_data(oldIssuePath)
+    oldIssue.append(issue_id)
+    save_data(oldIssuePath, oldIssue, indent=2)
 
 def checked_issue(issue_id):
     """Verify that the issue has not already been reported."""
-    with oldIssuePath.open(mode='r') as file:
-        oldIssue = json.load(file)
-        if not issue_id in oldIssue:
-            return True
-        return False
+    oldIssue = load_data(oldIssuePath)
+    if not issue_id in oldIssue:
+        return True
+    return False
 
 def remove_repo(user_id, repoDict):
     """Delete the invalid repository."""
-    with userDataPath.open(mode='r+') as file:
-        userData = json.load(file)
-        for user in userData:
-            if user['user_id'] == user_id:
-                user['data'].remove(repoDict)
-                if not user['data']:   # Verify whether the user has any repositories for tracking future issues
-                    userData.remove(user)
-        file.seek(0)
-        json.dump(userData, file, indent=4)  # Write the updated data back to the file
-        file.truncate() 
+    userData = load_data(userDataPath)
+    for user in userData:
+        if user['user_id'] == user_id:
+            user['data'].remove(repoDict)
+            if not user['data']:   # Verify whether the user has any repositories for tracking future issues
+                userData.remove(user)
+
+    save_data(userDataPath, userData)
 
 def get_issues(repo_owner, repo_name):
     """Gets the list of issues in the specified repository."""
@@ -134,16 +139,18 @@ def prompt_repo_to_track(update, context):
             )
     return 1  # This returns the track() function
 
-def add_user(user_id, repo_name, repo_owner, userData):
+def add_user(user_id, repo_name, repo_owner):
     new_user = {
             "user_id": user_id,
             "data": [{repo_owner: repo_name}]
         }
+    userData = load_data(userDataPath)
     userData.append(new_user)
     
-def add_repo(user_id, repo_name, repo_owner, userData):
+def add_repo(user_id, repo_name, repo_owner):
     """Add a repository to an existing user's tracked repositories."""
     new_repo = {repo_owner: repo_name}
+    userData = load_data(userDataPath)
     for user in userData:
         if user["user_id"] == user_id and new_repo not in user["data"]:
             user["data"].append(new_repo)
@@ -159,34 +166,29 @@ def track_repo(update, context):
     else:
         if re.match(pattern, user_input):
             repo_owner, repo_name = user_input.split(", ")
-            with userDataPath.open(mode='r+') as file:
-                userData = json.load(file)
-                if not userData or user_id not in [user["user_id"] for user in userData]:
-                    add_user(user_id, repo_name, repo_owner, userData)
-                    dev.active_users.append(update.message.from_user.first_name)
-                else:
-                    add_repo(user_id, repo_name, repo_owner, userData)
-                    dev.active_users.append(update.message.from_user.first_name)
+            userData = load_data(userDataPath)
 
-                # Write the updated data back to the file
-                file.seek(0)
-                json.dump(userData, file, indent=4)
-                file.truncate()
+            if not userData or user_id not in [user["user_id"] for user in userData]:
+                add_user(user_id, repo_name, repo_owner)
+                dev.active_users.append(update.message.from_user.first_name)
+            else:
+                add_repo(user_id, repo_name, repo_owner)
+                dev.active_users.append(update.message.from_user.first_name)
+
+            save_data(userDataPath, userData)
             msg = "Your repo has been saved!"
         else:
             msg = "Something went wrong. Please try again."
-    
         update.message.reply_text(msg)
     return ConversationHandler.END
 
 def get_current_repos(user_id):
     """Retrieve the user's repositories from the database."""
-    with userDataPath.open(mode='r') as file:
-        userData = json.load(file)    
-        repoDictList = next((user['data'] for user in userData if user['user_id'] == user_id), None)
-        if repoDictList is not None:
-            return [repo for repoDict in repoDictList for repo in repoDict.values()]
-        return None
+    userData = load_data(userDataPath)    
+    repoDictList = next((user['data'] for user in userData if user['user_id'] == user_id), None)
+    if repoDictList is not None:
+        return [repo for repoDict in repoDictList for repo in repoDict.values()]
+    return None
 
 def send_inline_keyboard(user_id, repos):
     """Create the inline keyboard markup with user's repositories and send it to the user."""
@@ -208,40 +210,32 @@ def prompt_repo_to_untrack(update, context):
 
 def untrack_repo(user_id, repo):
     """Remove the specified repository from the user's list in the database."""
-    with userDataPath.open(mode='r+') as file:
-        userData = json.load(file)
-        repoDictList = [user['data'] for user in userData if user['user_id'] == user_id]
-        
-        # Remove the specified repository from the user's tracking list.
-        for Dict in repoDictList:
-            if repo in Dict.values():
-                repoDict = Dict
-                break
-        repoDictList.remove(repoDict)
-        # Verify whether the user has any repositories for tracking future issues.
-        for user in userData:
-            if user['user_id'] == user_id:
-                userData.remove(user)
+    userData = load_data(userDataPath)
+    repoDictList = [user['data'] for user in userData if user['user_id'] == user_id]
+    
+    # Remove the specified repository from the user's tracking list.
+    for Dict in repoDictList:
+        if repo in Dict.values():
+            repoDict = Dict
+            break
+    repoDictList.remove(repoDict)
+    # Verify whether the user has any repositories for tracking future issues.
+    for user in userData:
+        if user['user_id'] == user_id:
+            userData.remove(user)
 
-        # Write the updated data back to the file.
-        file.seek(0)
-        json.dump(userData, file, indent=4)
-        file.truncate()
+    save_data(userDataPath, userData)
 
 def untrack_all_repos(user_id):
     """Delete all repositories from tracking list."""
-    with userDataPath.open(mode='r+') as file:
-        userData = json.load(file)
+    userData = load_data(userDataPath)
 
-        # Remove the user's information from the database.
-        for user in userData:
-            if user['user_id'] == user_id:
-                userData.remove(user)
-                
-        # Write the updated data back to the file.
-        file.seek(0)
-        json.dump(userData, file, indent=4)
-        file.truncate()
+    # Remove the user's information from the database.
+    for user in userData:
+        if user['user_id'] == user_id:
+            userData.remove(user)
+            
+    save_data(userDataPath, userData)
 
 def untrack_buttons_callback(update, context):
     query = update.callback_query
@@ -258,22 +252,23 @@ def untrack_buttons_callback(update, context):
 def list_repos(update, context):
     """Show the repositories the user has subscribed to."""
     user_id = update.message.from_user.id
-    with userDataPath.open(mode='r') as file:
-        userData = json.load(file)
-        if user_id not in [user["user_id"] for user in userData] or not [user['data'] for user in userData if user['user_id'] == user_id]:
-            msg = f"Your repository list is empty."
+    userData = load_data(userDataPath)
+
+    if user_id not in [user["user_id"] for user in userData] or not [user['data'] for user in userData if user['user_id'] == user_id]:
+        msg = f"Your repository list is empty."
+    else:
+        msg = 'Owner\t\t\t\t\t\t\tRepository'
+        repoDictList = next((user['data'] for user in userData if user['user_id'] == user_id), None)
+        if repoDictList is not None:
+            counter = 1
+            for repoDict in repoDictList:
+                for owner, repo in repoDict.items():
+                    msg += f"\n{counter}. {owner}\t\t\t\t\t\t\t{repo}"
+                    counter += 1
         else:
-            msg = 'Owner\t\t\t\t\t\t\tRepository'
-            repoDictList = next((user['data'] for user in userData if user['user_id'] == user_id), None)
-            if repoDictList is not None:
-                counter = 1
-                for repoDict in repoDictList:
-                    for owner, repo in repoDict.items():
-                        msg += f"\n{counter}. {owner}\t\t\t\t\t\t\t{repo}"
-                        counter += 1
-            else:
-                msg = "Something went wrong. Please try again."
-        update.message.reply_text(msg)
+            msg = "Something went wrong. Please try again."
+
+    update.message.reply_text(msg)
 
 def prompt_feedback(update, context):
     """Prompt user to enter their feedback."""
@@ -306,20 +301,20 @@ def error_handler(update, context):
 
 def send_notification():
     """Sends a notification to the user if there are any new issues in the repo."""
-    with userDataPath.open(mode='r') as file:
-        userData = json.load(file)
-        if userData:
-            iterableData = [(owner, repo, user['user_id']) for user in userData for repoDict in user['data'] for owner, repo in repoDict.items()]
-            for items in iterableData:
-                new_issue, reply_markup = get_issues(items[0], items[1])
-                
-                if new_issue is None:
-                    noRepoFound = f"There is no repository called '{items[1]}' under the ownership of '{items[0]}'."
-                    updater.bot.send_message(chat_id=items[2], text=noRepoFound)
-                    remove_repo(items[2], {items[0]: items[1]})
-                    dev.invalid_inputs += 1
-                else:
-                    updater.bot.send_message(chat_id=items[2], text=new_issue, reply_markup=reply_markup, disable_web_page_preview=True)
+    userData = load_data(userDataPath)
+
+    if userData:
+        iterableData = [(owner, repo, user['user_id']) for user in userData for repoDict in user['data'] for owner, repo in repoDict.items()]
+        for items in iterableData:
+            new_issue, reply_markup = get_issues(items[0], items[1])
+            
+            if new_issue is None:
+                noRepoFound = f"There is no repository called '{items[1]}' under the ownership of '{items[0]}'."
+                updater.bot.send_message(chat_id=items[2], text=noRepoFound)
+                remove_repo(items[2], {items[0]: items[1]})
+                dev.invalid_inputs += 1
+            else:
+                updater.bot.send_message(chat_id=items[2], text=new_issue, reply_markup=reply_markup, disable_web_page_preview=True)
 
 def cancel():
     """Conclude the conversation."""
