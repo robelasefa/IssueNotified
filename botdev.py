@@ -11,7 +11,6 @@ class BotDeveloper:
         self.invalid_inputs = 0
         self.active_users = []
         self.repo_owners = []
-        self.user_feedbacks = []
         self.timePath = Path('last_notification_time.txt')
 
     def _read_last_notification_time(self):
@@ -41,7 +40,7 @@ class BotDeveloper:
         return issues
 
     def _orgranize_bot_info(self, last_time, users, issues):
-        """"""
+        """Organize the bot activity informations in a way to be sent to the developer."""
         self.counted_users = Counter(self.active_users)
         self.counted_owners = Counter(self.repo_owners)
         self.top_5_users = self.counted_users.most_common(5)
@@ -65,35 +64,22 @@ class BotDeveloper:
                 msgE += "  Name: {}\t\tAsked: {}\n".format(owner[0], owner[1])
         else:
             msgE = '---\n'
-        if self.user_feedbacks:
-            msgF = f"You have {len(self.user_feedbacks)} new user feedbacks:"  # This last message has not \n.
-            for feedback in self.user_feedbacks:
-                if type(feedback) is set:
-                    feedback = dict(enumerate(feedback))  # Convert the set object to a dictionary object
-                    # with integer keys, assuming that there has been some error regarding the name of the user .            
-                for userName, feedbackMsg in feedback.items():
-                    msgF += f"{userName}: \n\t'{feedbackMsg}'"
-        else:
-            msgF = '---'
-        
-        composedMessage = msgTitle + msgA + msgB + msgC + msgD + msgE + msgF
+
+        composedMessage = msgTitle + msgA + msgB + msgC + msgD + msgE
         return composedMessage
         
-    def notify_dev(self, developer_id):
+    def send_botInfo_to_dev(self, developer_id):
+        """Send a notification about the bot activity to the bot developer."""
         ONE_HOUR = 3600
         TWELVE_HOURS = 12 * ONE_HOUR
-        with open("user_data.json", "r") as file:
-            userData = json.load(file)
-            users = len(userData)
+        current_time = int(time.time())
         last_time = self._read_last_notification_time()
         formatted_time = self._parse_timestamp(last_time)
         number_of_users = self._read_number_of_users()
         number_of_issues = self._read_number_of_issues()
 
-        composedMessage = self._orgranize_bot_info(formatted_time, number_of_users, number_of_issues)
-        current_time = int(time.time())
-
-        if current_time - last_time >= TWELVE_HOURS:  # Notify once per 12 hour
+        if current_time - last_time >= TWELVE_HOURS:
+            composedMessage = self._orgranize_bot_info(formatted_time, number_of_users, number_of_issues)
             devMsg = composedMessage
             self._write_last_notification_time(current_time)
             self.user_feedbacks.clear()  # Clear the list after submitting the new feedback
@@ -109,6 +95,13 @@ Please come back in {hours_left} hours and {minutes_left} minutes to check for a
             devMsg = untimedRequest
 
         self.updater.bot.send_message(chat_id=developer_id, text=devMsg)
+    
+    def send_feedbacks_to_dev(self, feedbackList, developer_id):
+        """Send feedbacks from bot users to bot developer."""
+        feedbackMsg = f"You have a new feedback from {feedbackList[0]}:"
+        feedbackMsg += f"\n\n{feedbackList[1]}"
+        
+        self.updater.bot.send_message(chat_id=developer_id, text=feedbackMsg)
 
     def new_features(self, InfoMsg):
         """Notify users about the improvements made to the bot."""

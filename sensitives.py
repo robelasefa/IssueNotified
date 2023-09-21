@@ -43,7 +43,7 @@ We're so sorry for the bugs in our bot lately. We know they've been frustrating 
 We're happy to announce that we've made some improvements and bug fixes, and our bot is now running smoothly again \U0001F680! You can now receive timely updates on your favorite repositories with ease!
 
 Thank you for choosing our bot \U0001F916 . We're always looking for ways to improve, so please don't hesitate to share any feedback or questions in the comments section \U0001F4AC.
-""" 
+"""
 
 MESSAGE2 = f"""
 \U0001F389 \U0001F680 IssueNotified Bot Update!  \U0001F389 \U0001F680
@@ -59,4 +59,5 @@ Now, you can simply click on an inline button to untrack a repository, instead o
 {SPRACLE_EMOJI} More bug fixes and improvements!
 We hope you enjoy the new features and improvements to the IssueNotified bot! Please let us know if you have any feedback or suggestions. \U0001F60A
 
-Thank you for using IssueNotified! \U0001F64F"""
+Thank you for using IssueNotified! \U0001F64F
+"""

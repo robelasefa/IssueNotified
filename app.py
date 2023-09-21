@@ -40,28 +40,30 @@ if not oldIssuePath.exists():
     with open(oldIssuePath, "w") as file:
         json.dump([], file, indent=2)
 
-# Check for bot new features and send messages only once
-is_sent = True
-if is_sent:
-    dev.new_features(sensitives.MESSAGE1)
-    is_sent = False
-
-class botExceptions(Exception):
-    """A bot exception class to indicate error when something went wrong."""
-    pass
-
 def start(update, context):
     """Send an introductory message when the user issues the /start command."""
     user = update.message.from_user.first_name
     WAVING_HAND_EMOJI = '\U0001F44B'
     PARTY_POPPER_EMOJI = '\U0001F389'
-    welcome_msg =  f"""{WAVING_HAND_EMOJI}Hi {user}! Welcome to IssueNotified bot! {PARTY_POPPER_EMOJI}
-    \n\nWe are excited to have you join us on this journey with IssueNotified bot, your personal assistant for GitHub repositories.
+    welcome_msg =  f"""
+{WAVING_HAND_EMOJI}Hi {user}! Welcome to IssueNotified bot! {PARTY_POPPER_EMOJI}
+\n\nWe are excited to have you join us on this journey with IssueNotified bot, your personal assistant for GitHub repositories.
 With our stunning and timely notifications, you'll always be the first to know about any new issues.
 Just type /track and let us take care of the rest."""
     update.message.reply_text(welcome_msg)
 
-def oldIssue(issue_id):
+class botExceptions(Exception):
+    """A bot exception class to indicate error when something went wrong."""
+    pass
+
+def notify_new_features(update_message):
+    """Check for bot new features and send messages only once."""
+    is_sent = True
+    if is_sent:
+        dev.new_features(update_message)
+        is_sent = False
+
+def old_issue(issue_id):
     """Delete the reported or old issue."""
     with oldIssuePath.open(mode='r') as file:
         oldIssue = json.load(file)
@@ -70,19 +72,13 @@ def oldIssue(issue_id):
     with open(oldIssuePath, "w") as file:
         json.dump(oldIssue, file, indent=2)
 
-def checkedIssue(issue_id):
+def checked_issue(issue_id):
     """Verify that the issue has not already been reported."""
     with oldIssuePath.open(mode='r') as file:
         oldIssue = json.load(file)
         if not issue_id in oldIssue:
             return True
         return False
-
-def add_repo(user_id, new_repo, userData):
-    """Add a repository to an existing user's tracked repositories."""
-    for user in userData:
-        if user["user_id"] == user_id and not new_repo in user["data"]:
-            user["data"].append(new_repo)
 
 def remove_repo(user_id, repoDict):
     """Delete the invalid repository."""
@@ -93,10 +89,9 @@ def remove_repo(user_id, repoDict):
                 user['data'].remove(repoDict)
                 if not user['data']:   # Verify whether the user has any repositories for tracking future issues
                     userData.remove(user)
-        file.seek(0)  # Move the file pointer to the beginning of the file
+        file.seek(0)
         json.dump(userData, file, indent=4)  # Write the updated data back to the file
-        file.truncate()  # Truncate any remaining content in the file
-        
+        file.truncate() 
 
 def get_issues(repo_owner, repo_name):
     """Gets the list of issues in the specified repository."""
@@ -106,11 +101,6 @@ def get_issues(repo_owner, repo_name):
     response = requests.get(repo_url, headers=headers)
 
     if response.status_code == 200:
-        canBeChecked = True
-    else:
-        canBeChecked = False  # Connection error
-        
-    if canBeChecked:
         if response is None:
             return None   # The repo entered by the user cannot be located
         else:
@@ -120,21 +110,22 @@ def get_issues(repo_owner, repo_name):
                 issue_url = issue['issue']['html_url']
                 issue_id = issue['id']
                 try:
-                    if checkedIssue(issue_id):
+                    if checked_issue(issue_id):
                         issue_url_button = InlineKeyboardButton(text='View Issue', url=issue_url)  # Define an InlineKeyboardButton object for the button
-                        reply_markup_1 = InlineKeyboardMarkup([[issue_url_button]])  # Create an InlineKeyboardMarkup object for the issue url
+                        reply_markup = InlineKeyboardMarkup([[issue_url_button]])  # Create an InlineKeyboardMarkup object for the issue url
 
                         BELL_EMOJI = '\U0001F514'
                         issue_str = f"{BELL_EMOJI}New issue on {repo_name.capitalize()} \
                                     \n-------------------------------------- \
                                     \n\n{issue_title}"
-                        oldIssue(issue_id)
+                        old_issue(issue_id)
                         dev.repo_owners.append(repo_owner)
-                        return issue_str, reply_markup_1
+                        return issue_str, reply_markup
                     else:
                         raise botExceptions("This issue isn't new.")
                 except botExceptions:
-                    pass    
+                    pass
+
 def prompt_repo_to_track(update, context):
     """Ask the user to provide the name and owner of the repository that they want to be tracked."""
     update.message.reply_text(
@@ -143,121 +134,133 @@ def prompt_repo_to_track(update, context):
             )
     return 1  # This returns the track() function
 
-def track(update, context):
-    """Add the repository that the user wants to be notified about the latest issues."""
-    global repo_owner, repo_name
+def add_user(user_id, repo_name, repo_owner, userData):
+    new_user = {
+            "user_id": user_id,
+            "data": [{repo_owner: repo_name}]
+        }
+    userData.append(new_user)
+    
+def add_repo(user_id, repo_name, repo_owner, userData):
+    """Add a repository to an existing user's tracked repositories."""
+    new_repo = {repo_owner: repo_name}
+    for user in userData:
+        if user["user_id"] == user_id and new_repo not in user["data"]:
+            user["data"].append(new_repo)
 
-    user_input = update.message.text
+def track_repo(update, context):
+    """Add the repository that the user wants to be notified about the latest issues."""
     user_id = update.message.from_user.id
+    user_input = update.message.text
+    pattern = r'^[a-zA-Z0-9_-]+,\s[a-zA-Z0-9_-]+$'
 
     if user_id in sensitives.DEVELOPERS.values() and update.message.text == sensitives.COMMUNICATION_CODE:
-        dev.notify_dev(user_id)
+        dev.send_botInfo_to_dev(user_id)
     else:
-        pattern = r'^[a-zA-Z0-9_-]+,\s[a-zA-Z0-9_-]+$'
         if re.match(pattern, user_input):
             repo_owner, repo_name = user_input.split(", ")
-            msg = f"Your repo has been saved!"
-            is_passed = True
-        else:
-            msg = "Something went wrong. Please try again."
-            is_passed = False
-        
-        if is_passed:
-            new_user = {
-                    "user_id": user_id,
-                    "data": [{repo_owner: repo_name}]
-                                }
-            new_repo = {repo_owner: repo_name}
-
             with userDataPath.open(mode='r+') as file:
                 userData = json.load(file)
-                if not userData or not user_id in [user["user_id"] for user in userData]:
+                if not userData or user_id not in [user["user_id"] for user in userData]:
+                    add_user(user_id, repo_name, repo_owner, userData)
                     dev.active_users.append(update.message.from_user.first_name)
-                    userData.append(new_user)
                 else:
-                    add_repo(user_id, new_repo, userData)
+                    add_repo(user_id, repo_name, repo_owner, userData)
                     dev.active_users.append(update.message.from_user.first_name)
-                file.seek(0)  # Move the file pointer to the beginning of the file
-                json.dump(userData, file)  # Write the updated data back to the file
-                file.truncate()  # Truncate any remaining content in the file
+
+                # Write the updated data back to the file
+                file.seek(0)
+                json.dump(userData, file, indent=4)
+                file.truncate()
+            msg = "Your repo has been saved!"
+        else:
+            msg = "Something went wrong. Please try again."
+    
         update.message.reply_text(msg)
     return ConversationHandler.END
 
-def prompt_repo_to_untrack(update, context):
-    """Prompts the user to select a repository to cease tracking."""
-    CROSS_MARK_EMOJI = chr(0x274C)
-    user_id = update.message.from_user.id
-
+def get_current_repos(user_id):
+    """Retrieve the user's repositories from the database."""
     with userDataPath.open(mode='r') as file:
-        userData = json.load(file)
+        userData = json.load(file)    
         repoDictList = next((user['data'] for user in userData if user['user_id'] == user_id), None)
-
         if repoDictList is not None:
-            repoList = [repo for repoDict in repoDictList for repo in repoDict.values()]
-            untracking_inline_keyboard = []  # Create a list of inline buttons, one button for each repository in the user's tracking list.
-            
-            for repo in repoList:
-                untracking_inline_keyboard.append([InlineKeyboardButton(text=repo, callback_data='untrack_repo:' + repo)])
-            untracking_inline_keyboard.append([InlineKeyboardButton(text=f'{CROSS_MARK_EMOJI} Remove all', callback_data='untrack_all_repo')])
+            return [repo for repoDict in repoDictList for repo in repoDict.values()]
+        return None
 
-            # Send a message to the user with the list of inline buttons.
-            update.message.reply_text(text='Which repository do you want to untrack?', reply_markup=InlineKeyboardMarkup(untracking_inline_keyboard))
-        else:
-            update.message.reply_text("You have no repositories to stop receiving notifications from.")
-            
-    return 3 # This returns the untrack() function
+def send_inline_keyboard(user_id, repos):
+    """Create the inline keyboard markup with user's repositories and send it to the user."""
+    CROSS_MARK_EMOJI = chr(0x274C)
+    repo_buttons = [InlineKeyboardButton(text=repo, callback_data=repo) for repo in repos]
+    repo_buttons.append(InlineKeyboardButton(text=f'{CROSS_MARK_EMOJI} Remove all', callback_data='remove_all'))
+    keyboard = InlineKeyboardMarkup([repo_buttons])
+    
+    updater.bot.send_message(chat_id=user_id, text='Which repository do you want to untrack?', reply_markup=keyboard)
+   
+def prompt_repo_to_untrack(update, context):
+    """Prompts user to select a repository to cease tracking."""
+    user_id = update.message.from_user.id
+    repos = get_current_repos(user_id)
+    if repos:
+        send_inline_keyboard(user_id, repos)
+    else:
+        update.message.reply_text('You have no repositories to stop receiving notifications from.')
 
-def untrack(update, context):
-    """Remove the repository the user wants to cease tracking."""
-    user_id = update.callback_query.from_user.id
-    repo_name = update.callback_query.data.split(':')[1]  # Get the repository name from the callback data.
-
+def untrack_repo(user_id, repo):
+    """Remove the specified repository from the user's list in the database."""
     with userDataPath.open(mode='r+') as file:
         userData = json.load(file)
         repoDictList = [user['data'] for user in userData if user['user_id'] == user_id]
-
+        
+        # Remove the specified repository from the user's tracking list.
         for Dict in repoDictList:
-            if repo_name in Dict.values():
+            if repo in Dict.values():
                 repoDict = Dict
                 break
         repoDictList.remove(repoDict)
-        
-        if not repoDictList:  # Verify whether the user has any repositories for tracking future issues, and if not, delete the user's information from the database.
-            for user in userData:
-                if user['user_id'] == user_id:
-                    userData.remove(user)
-
-        file.seek(0)  # Move the file pointer to the beginning of the file
-        json.dump(userData, file, indent=4)  # Write the updated data back to the file
-        file.truncate()  # Truncate any remaining content in the file
-
-    # Send a message to the user confirming that the repository has been removed from their tracking list.
-    updater.bot.send_message(chat_id=user_id, text='The repository {} has been removed from your tracking list.'.format(repo_name))
-    return ConversationHandler.END
-
-def untrack_all(update, context):
-    """Delete all repositories from tracking list."""
-    user_id = update.callback_query.from_user.id
-
-    with userDataPath.open(mode='r+') as file:
-        userData = json.load(file)
-
-        for user in userData: # Remove user from the database, since they have no any remaining repository to keep notifying them. 
+        # Verify whether the user has any repositories for tracking future issues.
+        for user in userData:
             if user['user_id'] == user_id:
                 userData.remove(user)
 
-        file.seek(0)  # Move the file pointer to the beginning of the file
-        json.dump(userData, file, indent=4)  # Write the updated data back to the file
-        file.truncate()  # Truncate any remaining content in the file
+        # Write the updated data back to the file.
+        file.seek(0)
+        json.dump(userData, file, indent=4)
+        file.truncate()
 
-    updater.bot.send_message(chat_id=user_id, text="All clear! You have now untracked all of your repositories." )
+def untrack_all_repos(user_id):
+    """Delete all repositories from tracking list."""
+    with userDataPath.open(mode='r+') as file:
+        userData = json.load(file)
+
+        # Remove the user's information from the database.
+        for user in userData:
+            if user['user_id'] == user_id:
+                userData.remove(user)
+                
+        # Write the updated data back to the file.
+        file.seek(0)
+        json.dump(userData, file, indent=4)
+        file.truncate()
+
+def untrack_buttons_callback(update, context):
+    query = update.callback_query
+    user_id = query.from_user.id
+    if query.data == "remove_all":
+        untrack_all_repos(user_id)
+        query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))
+        updater.bot.send_message(chat_id=user_id, text="All clear! You have now untracked all of your repositories.")
+    else:
+        untrack_repo(user_id, query.data)
+        query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))
+        updater.bot.send_message(chat_id=user_id, text=f'The repository {query.data} has been removed from your tracking list.')
 
 def list_repos(update, context):
     """Show the repositories the user has subscribed to."""
     user_id = update.message.from_user.id
     with userDataPath.open(mode='r') as file:
         userData = json.load(file)
-        if not user_id in [user["user_id"] for user in userData] or not [user['data'] for user in userData if user['user_id'] == user_id]:
+        if user_id not in [user["user_id"] for user in userData] or not [user['data'] for user in userData if user['user_id'] == user_id]:
             msg = f"Your repository list is empty."
         else:
             msg = 'Owner\t\t\t\t\t\t\tRepository'
@@ -272,23 +275,34 @@ def list_repos(update, context):
                 msg = "Something went wrong. Please try again."
         update.message.reply_text(msg)
 
-def take_feedback(update, context):
-    """"""
+def prompt_feedback(update, context):
+    """Prompt user to enter their feedback."""
     update.message.reply_text("What steps can we take to enhance your interaction with our bot? \
 Please share your thoughts on your stay on the bot.")
     return 2  # This returns the process_feedback() function
 
 def process_feedback(update, context):
-    """"""
+    """Retrieve the user's feedback and send it to bot dev."""
     username =  update.message.from_user.username
     first_name = update.message.from_user.first_name
 
     name = username if username else first_name
-    feedbackMsg = update.message.text
-    dev.user_feedbacks.append({name, feedbackMsg})
+    feedback = update.message.text
+
+    DEVELOPER_ID = sensitives.DEVELOPERS["DEVELOPER_ROBEL_ID"]
+    dev.send_feedbacks_to_dev([name, feedback], DEVELOPER_ID)
 
     update.message.reply_text("Thank you for taking time to share your thoughts with us!")
     return ConversationHandler.END
+
+def error_handler(update, context):
+    """Handles errors that occur during the bot's runtime."""
+    logger.error(context.error, exc_info=True)
+
+    DEVELOPER_ID = sensitives.DEVELOPERS["DEVELOPER_ROBEL_ID"]
+
+    # Send a notification message to the bot's developer about the error.
+    updater.bot.send_message(chat_id=DEVELOPER_ID, text='An error occurred in the IssueNotified bot: {}'.format(context.error))
 
 def send_notification():
     """Sends a notification to the user if there are any new issues in the repo."""
@@ -297,73 +311,59 @@ def send_notification():
         if userData:
             iterableData = [(owner, repo, user['user_id']) for user in userData for repoDict in user['data'] for owner, repo in repoDict.items()]
             for items in iterableData:
-                new_issue, reply_markup_1 = get_issues(items[0], items[1])
+                new_issue, reply_markup = get_issues(items[0], items[1])
                 
                 if new_issue is None:
-                    noRepoFound = f"There is no repository called '{items[1]}' under the ownership of '{repo_owner}'."
+                    noRepoFound = f"There is no repository called '{items[1]}' under the ownership of '{items[0]}'."
                     updater.bot.send_message(chat_id=items[2], text=noRepoFound)
                     remove_repo(items[2], {items[0]: items[1]})
                     dev.invalid_inputs += 1
                 else:
-                    updater.bot.send_message(chat_id=items[2], text=new_issue, reply_markup=reply_markup_1, disable_web_page_preview=True)
-
-timer = threading.Timer(15 * 60, send_notification)  # Notify users every 15 minutes
-timer.start()
-
-def error_handler(update, context):
-    """Handles errors that occur during the bot's runtime."""
-    logger.error(context.error)
-
-    DEVELOPER_ID = sensitives.DEVELOPERS["DEVELOPER_ROBEL_ID"]
-
-    # Send a notification message to the bot's developer about the error.
-    updater.bot.send_message(chat_id=DEVELOPER_ID, text='An error occurred in the IssueNotified bot: {}'.format(context.error))
+                    updater.bot.send_message(chat_id=items[2], text=new_issue, reply_markup=reply_markup, disable_web_page_preview=True)
 
 def cancel():
     """Conclude the conversation."""
     pass  # Do nothing
 
-# This will manage the conversation to track new repository.
-conv_handler1 = ConversationHandler(
-    entry_points=[CommandHandler('track', prompt_repo_to_track)],
-    states = {
-        1: [MessageHandler(Filters.text, track)]
-    },
-    fallbacks=[CommandHandler('cancel', cancel)])
+def main():
+    # notify_new_features(sensitives.MESSAGE2)  # Send bot improvement messesages ONLY ONCE
 
-# This will manage the convesation to receive feedback from the user.
-conv_handler2 = ConversationHandler(
-    entry_points=[CommandHandler('feedback', take_feedback)],
-    states = {
-        2: [MessageHandler(Filters.text, process_feedback)]
-    },
-    fallbacks=[CommandHandler('cancel', cancel)])
+    # This will manage the conversation to track new repository.
+    conv_handler1 = ConversationHandler(
+        entry_points=[CommandHandler('track', prompt_repo_to_track)],
+        states = {
+            1: [MessageHandler(Filters.text, track_repo)]
+        },
+        fallbacks=[CommandHandler('cancel', cancel)])
 
-# This will manage the conversation to track new repository.
-conv_handler3 = ConversationHandler(
-    entry_points=[CommandHandler('untrack', prompt_repo_to_untrack)],
-    states = {
-        3: [MessageHandler(Filters.text, untrack)]
-    },
-    fallbacks=[CommandHandler('cancel', cancel)])
+    # This will manage the convesation to receive feedback from the user.
+    conv_handler2 = ConversationHandler(
+        entry_points=[CommandHandler('feedback', prompt_feedback)],
+        states = {
+            2: [MessageHandler(Filters.text, process_feedback)]
+        },
+        fallbacks=[CommandHandler('cancel', cancel)])
 
+    # Command Handlers
+    disp.add_handler(CommandHandler("start", start))
+    disp.add_handler(CommandHandler("list", list_repos))
+    disp.add_handler(CommandHandler("untrack", prompt_repo_to_untrack))
 
-# Command Handlers
-disp.add_handler(CommandHandler("start", start))
-disp.add_handler(CommandHandler("list", list_repos))
+    # Callback query handler
+    disp.add_handler(CallbackQueryHandler(untrack_buttons_callback))
 
-# Callback query handlers
-disp.add_handler(CallbackQueryHandler(untrack_all, pattern='untrack_all_callback_data'))
-disp.add_handler(CallbackQueryHandler(untrack))
+    # Conversational Handlers
+    disp.add_handler(conv_handler1)
+    disp.add_handler(conv_handler2)
 
-# Conversational Handlers
-disp.add_handler(conv_handler1)
-disp.add_handler(conv_handler2)
-disp.add_handler(conv_handler3)
+    # Error Handler
+    disp.add_error_handler(error_handler)
 
-# This handles the errors occured during the bot's runtime
-disp.add_error_handler(error_handler)
+    timer = threading.Timer(15 * 60, send_notification)  # Notify users every 15 minutes
+    timer.start()
 
-updater.start_polling()
-updater.idle()
+    updater.start_polling()  # Run the bot
+    updater.idle()
 
+if __name__ == "__main__":
+    main()
