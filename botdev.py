@@ -3,6 +3,7 @@ from pathlib import Path
 from datetime import datetime
 import time
 import json
+import logging
 
 import telegram.error
 
@@ -14,6 +15,12 @@ class BotDeveloper:
         self.active_users = []
         self.repo_owners = []
         self.timePath = Path('last_notification_time.txt')
+
+        # Enable logging
+        logging.basicConfig(
+            filename='botlog.log', format='%(asctime)s:%(name)s:%(levelname)s:  %(message)s', level=logging.DEBUG
+            )
+        self.logger = logging.getLogger(__name__)
 
     def _read_last_notification_time(self):
         if self.timePath.exists():
@@ -114,11 +121,11 @@ Please come back in {hours_left} hours and {minutes_left} minutes to check for a
                     self.updater.bot.send_message(chat_id=user["user_id"], text=InfoMsg)
                 except (telegram.error.BadRequest, Exception) as e:
                     if 'bot was blocked by the user' in str(e):
-                        print(f"User {user['user_id']} has blocked the bot.")
+                        self.logger.info(f"User {user['user_id']} has blocked the bot.")
                     elif 'user is deactivated' in str(e):
-                        print(f"User {user['user_id']} has deleted their account.")
+                        self.logger.info(f"User {user['user_id']} has deleted their account.")
                     else:
-                        print(f"Error sending message to user {user['user_id']}: {e}")
+                        self.logger.info(f"Unable to reach {user['user_id']} with bot update messages: {e}")
                     userData.remove(user)   # Remove the user's information from the database.
 
             file.seek(0)

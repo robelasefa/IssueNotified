@@ -19,7 +19,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 import telegram.error
 
 # Enable logging
-logging.basicConfig(filename='botlog.log', format='%(asctime)s:%(name)s:%(levelname)s:      %(message)s', level=logging.DEBUG)
+logging.basicConfig(filename='botlog.log', format='%(asctime)s:%(name)s:%(levelname)s:  %(message)s', level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 TELEGRAM_TOKEN = sensitives.TELEGRAM_TOKEN
@@ -54,7 +54,7 @@ Just type /track and let us take care of the rest."""
     
     update.message.reply_text(welcome_msg)
 
-class botExceptions(Exception):
+class BotException(Exception):
     """A bot exception class to indicate error when something went wrong."""
     pass
 
@@ -128,8 +128,8 @@ def get_issues(repo_owner, repo_name):
                         dev.repo_owners.append(repo_owner)
                         return issue_str, reply_markup
                     else:
-                        raise botExceptions("This issue isn't new.")
-                except botExceptions:
+                        raise BotException("This issue isn't new.")
+                except BotException:
                     pass
 
 def prompt_repo_to_track(update, context):
@@ -337,8 +337,8 @@ def send_notification():
                         logger.info(f"User {items[2]} has deleted their account.")
                     else:
                         untrack_all_repos(items[2])   
-                        raise Exception from None  # The exceptions is not BadRequest, raise a general exception
-            except Exception as e:
+                        raise BotException("\n\tSomething went wrong with the user.")  # The exceptions is not BadRequest, raise a general exception
+            except BotException as e:
                  logger.info(f"Failure to deliver messages to user {items[2]}: {e}")
             
 def cancel():
