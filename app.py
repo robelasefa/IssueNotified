@@ -156,7 +156,7 @@ def add_repo(user_id, repo_name, repo_owner, userData):
 
 def track_repo(update, context):
     """Add the repository that the user wants to be notified about the latest issues."""
-    user_id = update.message.from_user.id
+    user_id = update.effective_user.id
     user_input = update.message.text
     pattern = r'^[a-zA-Z0-9_-]+,\s[a-zA-Z0-9_-]+$'
 
@@ -169,10 +169,10 @@ def track_repo(update, context):
 
             if not userData or user_id not in [user["user_id"] for user in userData]:
                 add_user(user_id, repo_name, repo_owner, userData)
-                dev.active_users.append(update.message.from_user.first_name)
+                dev.active_users.append(update.effective_user.first_name)
             else:
                 add_repo(user_id, repo_name, repo_owner, userData)
-                dev.active_users.append(update.message.from_user.first_name)
+                dev.active_users.append(update.effective_user.first_name)
 
             save_data(userDataPath, userData)
             msg = "Your repo has been saved!"
@@ -206,7 +206,7 @@ def get_inline_keyboard(repos):
     
 def prompt_repo_to_untrack(update, context):
     """Prompts user to select a repository to cease tracking."""
-    user_id = update.message.from_user.id
+    user_id = update.effective_user.id
     repos = get_current_repos(user_id)
     if repos:
         keyboard = get_inline_keyboard(repos)
@@ -242,7 +242,7 @@ def untrack_all_repos(user_id):
 
 def untrack_buttons_callback(update, context):
     query = update.callback_query
-    user_id = query.from_user.id
+    user_id = update.effective_user.id
     
     all_repo_removed_msg = "All clear! You have now untracked all of your repositories."
     operation_cancelled_msg = 'Cancelled'
@@ -265,7 +265,7 @@ def untrack_buttons_callback(update, context):
 
 def list_repos(update, context):
     """Show the repositories the user has subscribed to."""
-    user_id = update.message.from_user.id
+    user_id = update.effective_user.id
     userData = load_data(userDataPath)
 
     if user_id not in [user["user_id"] for user in userData] or not [user['data'] for user in userData if user['user_id'] == user_id]:
@@ -292,8 +292,8 @@ Please share your thoughts on your stay on the bot.")
 
 def process_feedback(update, context):
     """Retrieve the user's feedback and send it to bot dev."""
-    username =  update.message.from_user.username
-    first_name = update.message.from_user.first_name
+    username =  update.effective_user.username
+    first_name = update.effective_user.first_name
     DEVELOPER_ID = sensitives.DEVELOPERS["DEVELOPER_ROBEL_ID"]
 
     name = username if username else first_name
