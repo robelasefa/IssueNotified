@@ -19,7 +19,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 import telegram.error
 
 # Enable logging
-logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(name)s - %(message)s')
+logging.basicConfig(filename='botlog.log', format='%(asctime)s:%(name)s:%(levelname)s:      %(message)s', level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 TELEGRAM_TOKEN = sensitives.TELEGRAM_TOKEN
@@ -303,7 +303,7 @@ def process_feedback(update, context):
     dev.send_feedbacks_to_dev([name, feedback], DEVELOPER_ID)
     return ConversationHandler.END
 
-def error_handler(update, context):
+def handle_error(update, context):
     """Handles errors that occur during the bot's runtime."""
     logger.error(context.error, exc_info=True)
 
@@ -328,14 +328,19 @@ def send_notification():
                     dev.invalid_inputs += 1
                 else:
                     updater.bot.send_message(chat_id=items[2], text=new_issue, reply_markup=reply_markup, disable_web_page_preview=True, disable_notification=False)
-            except (telegram.error.BadRequest, Exception) as e:
+            except telegram.error.BadRequest as e:  # Remove the user's information from the database.
                     if 'bot was blocked by the user' in str(e):
-                        print(f"User {items[2]} has blocked the bot.")
+                        untrack_all_repos(items[2])
+                        logger.info(f"User {items[2]} has blocked the bot.")
                     elif 'user is deactivated' in str(e):
-                        print(f"User {items[2]} has deleted their account.")
+                        untrack_all_repos(items[2])
+                        logger.info(f"User {items[2]} has deleted their account.")
                     else:
-                        print(f"Error sending message to user {items[2]}: {e}")
-                    untrack_all_repos(items[2])   # Remove the user's information from the database.
+                        untrack_all_repos(items[2])   
+                        raise Exception from None  # The exceptions is not BadRequest, raise a general exception
+            except Exception as e:
+                 logger.info(f"Failure to deliver messages to user {items[2]}: {e}")
+            
 def cancel():
     """Conclude the conversation."""
     pass  # Do nothing
@@ -372,7 +377,7 @@ def main():
     disp.add_handler(conv_handler2)
 
     # Error Handler
-    disp.add_error_handler(error_handler)
+    disp.add_error_handler(handle_error)
 
     timer = threading.Timer(15 * 60, send_notification)  # Notify users every 15 minutes
     timer.start()
