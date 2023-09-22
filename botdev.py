@@ -4,6 +4,8 @@ from datetime import datetime
 import time
 import json
 
+import telegram.error
+
 class BotDeveloper:
     """A sample BotDeveloper class."""
     def __init__(self, updater):
@@ -82,7 +84,6 @@ class BotDeveloper:
             composedMessage = self._orgranize_bot_info(formatted_time, number_of_users, number_of_issues)
             devMsg = composedMessage
             self._write_last_notification_time(current_time)
-            self.user_feedbacks.clear()  # Clear the list after submitting the new feedback
         else:
             # Do some math to calculate the time until the next report is available
             time_diff = TWELVE_HOURS - (current_time - last_time)
@@ -105,12 +106,23 @@ Please come back in {hours_left} hours and {minutes_left} minutes to check for a
 
     def new_features(self, InfoMsg):
         """Notify users about the improvements made to the bot."""
-        with open("user_data.json", "r") as file:
+        with open("user_data.json", "r+") as file:
             userData = json.load(file)
 
-        for user in userData:
-           self.updater.bot.send_message(chat_id=user["user_id"], text=InfoMsg)
-    
+            for user in userData:
+                try:
+                    self.updater.bot.send_message(chat_id=user["user_id"], text=InfoMsg)
+                except (telegram.error.BadRequest, Exception) as e:
+                    if 'bot was blocked by the user' in str(e):
+                        print(f"User {user['user_id']} has blocked the bot.")
+                    elif 'user is deactivated' in str(e):
+                        print(f"User {user['user_id']} has deleted their account.")
+                    else:
+                        print(f"Error sending message to user {user['user_id']}: {e}")
+                    userData.remove(user)   # Remove the user's information from the database.
 
+            file.seek(0)
+            json.dump(userData, file, indent=4)
+            file.truncate()
 
     

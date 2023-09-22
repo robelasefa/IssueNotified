@@ -16,6 +16,7 @@ import threading
 import logging
 from telegram.ext import Updater, CommandHandler, MessageHandler, ConversationHandler, CallbackQueryHandler, Filters
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+import telegram.error
 
 # Enable logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(name)s - %(message)s')
@@ -139,18 +140,16 @@ def prompt_repo_to_track(update, context):
             )
     return 1  # This returns the track() function
 
-def add_user(user_id, repo_name, repo_owner):
+def add_user(user_id, repo_name, repo_owner, userData):
     new_user = {
             "user_id": user_id,
             "data": [{repo_owner: repo_name}]
         }
-    userData = load_data(userDataPath)
     userData.append(new_user)
     
-def add_repo(user_id, repo_name, repo_owner):
+def add_repo(user_id, repo_name, repo_owner, userData):
     """Add a repository to an existing user's tracked repositories."""
     new_repo = {repo_owner: repo_name}
-    userData = load_data(userDataPath)
     for user in userData:
         if user["user_id"] == user_id and new_repo not in user["data"]:
             user["data"].append(new_repo)
@@ -169,10 +168,10 @@ def track_repo(update, context):
             userData = load_data(userDataPath)
 
             if not userData or user_id not in [user["user_id"] for user in userData]:
-                add_user(user_id, repo_name, repo_owner)
+                add_user(user_id, repo_name, repo_owner, userData)
                 dev.active_users.append(update.message.from_user.first_name)
             else:
-                add_repo(user_id, repo_name, repo_owner)
+                add_repo(user_id, repo_name, repo_owner, userData)
                 dev.active_users.append(update.message.from_user.first_name)
 
             save_data(userDataPath, userData)
@@ -244,26 +243,25 @@ def untrack_all_repos(user_id):
 def untrack_buttons_callback(update, context):
     query = update.callback_query
     user_id = query.from_user.id
-    message_id = query.message.message_id
     
     all_repo_removed_msg = "All clear! You have now untracked all of your repositories."
     operation_cancelled_msg = 'Cancelled'
 
     if query.data == "cancel":
-        query.edit_message_text(chat_id=user_id, message_id=message_id, text=operation_cancelled_msg, reply_markup=None)
+        query.edit_message_text(text=operation_cancelled_msg, reply_markup=None)
     elif query.data == "remove_all":
         untrack_all_repos(user_id)
-        query.edit_message_text(chat_id=user_id, message_id=message_id, text=all_repo_removed_msg, reply_markup=None)
+        query.edit_message_text(text=all_repo_removed_msg, reply_markup=None)
     else:
         untrack_repo(user_id, query.data)
         repos = get_current_repos(user_id)
         repo_removed_msg = f'The repository {query.data} has been removed from your tracking list.'
         if repos:
             keyboard = get_inline_keyboard(get_current_repos(user_id))
-            query.edit_message_text(chat_id=user_id, message_id=message_id, text='Which repository do you want to untrack?', reply_markup=keyboard)
+            query.edit_message_text(text='Which repository do you want to untrack?', reply_markup=keyboard)
             updater.bot.send_message(chat_id=user_id, text=repo_removed_msg)
         else:
-            query.edit_message_text(chat_id=user_id, message_id=message_id, text=repo_removed_msg, reply_markup=None)    
+            query.edit_message_text(text=repo_removed_msg, reply_markup=None)    
 
 def list_repos(update, context):
     """Show the repositories the user has subscribed to."""
@@ -312,7 +310,7 @@ def error_handler(update, context):
     DEVELOPER_ID = sensitives.DEVELOPERS["DEVELOPER_ROBEL_ID"]
 
     # Send a notification message to the bot's developer about the error.
-    updater.bot.send_message(chat_id=DEVELOPER_ID, text='An error occurred in the IssueNotified bot: {}'.format(context.error))
+    updater.bot.send_message(chat_id=DEVELOPER_ID, text='An error occurred in the IssueNotified bot: \n{}'.format(context.error))
 
 def send_notification():
     """Sends a notification to the user if there are any new issues in the repo."""
@@ -322,15 +320,22 @@ def send_notification():
         iterableData = [(owner, repo, user['user_id']) for user in userData for repoDict in user['data'] for owner, repo in repoDict.items()]
         for items in iterableData:
             new_issue, reply_markup = get_issues(items[0], items[1])
-            
-            if new_issue is None:
-                noRepoFound = f"There is no repository called '{items[1]}' under the ownership of '{items[0]}'."
-                updater.bot.send_message(chat_id=items[2], text=noRepoFound)
-                remove_repo(items[2], {items[0]: items[1]})
-                dev.invalid_inputs += 1
-            else:
-                updater.bot.send_message(chat_id=items[2], text=new_issue, reply_markup=reply_markup, disable_web_page_preview=True, disable_notification=False)
-
+            try:
+                if new_issue is None:
+                    noRepoFound = f"There is no repository called '{items[1]}' under the ownership of '{items[0]}'."
+                    updater.bot.send_message(chat_id=items[2], text=noRepoFound)
+                    remove_repo(items[2], {items[0]: items[1]})
+                    dev.invalid_inputs += 1
+                else:
+                    updater.bot.send_message(chat_id=items[2], text=new_issue, reply_markup=reply_markup, disable_web_page_preview=True, disable_notification=False)
+            except (telegram.error.BadRequest, Exception) as e:
+                    if 'bot was blocked by the user' in str(e):
+                        print(f"User {items[2]} has blocked the bot.")
+                    elif 'user is deactivated' in str(e):
+                        print(f"User {items[2]} has deleted their account.")
+                    else:
+                        print(f"Error sending message to user {items[2]}: {e}")
+                    untrack_all_repos(items[2])   # Remove the user's information from the database.
 def cancel():
     """Conclude the conversation."""
     pass  # Do nothing
