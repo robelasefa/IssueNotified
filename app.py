@@ -197,8 +197,8 @@ def get_inline_keyboard(repos):
         repo_button = InlineKeyboardButton(text=repo, callback_data=repo)
         repo_buttons.append([repo_button])
 
-    remove_all_button = InlineKeyboardButton(text=f'{CROSS_MARK_EMOJI} Remove all', callback_data='remove_all')
     cancel_button = InlineKeyboardButton(text='Cancel', callback_data='cancel')
+    remove_all_button = InlineKeyboardButton(text=f'{CROSS_MARK_EMOJI} Remove all', callback_data='remove_all')
     repo_buttons.append([cancel_button, remove_all_button])
     
     keyboard = InlineKeyboardMarkup(repo_buttons)
