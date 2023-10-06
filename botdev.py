@@ -97,8 +97,10 @@ class BotDeveloper:
             hours_left =  time_diff // ONE_HOUR
             minutes_left = (time_diff % ONE_HOUR) // 60
             HI_EMOJI = "\U0001F44B"
-            untimedRequest = f"""{HI_EMOJI} Hi Coder!
-             \nIt looks like you've requested a report less than 12 hours ago. \
+            untimedRequest = f"""
+{HI_EMOJI} Hi Coder!
+             
+It looks like you've requested a report less than 12 hours ago.
 Please come back in {hours_left} hours and {minutes_left} minutes to check for a new report."""
             devMsg = untimedRequest
 

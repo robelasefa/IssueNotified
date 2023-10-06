@@ -7479,3 +7479,179 @@ NoneType: None
 2023-10-07 00:44:10,000:telegram.bot:DEBUG:  []
 2023-10-07 00:44:10,000:telegram.bot:DEBUG:  Exiting: get_updates
 2023-10-07 00:44:10,001:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:44:20,167:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:44:20,168:telegram.bot:DEBUG:  []
+2023-10-07 00:44:20,168:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:44:20,168:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:44:30,301:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:44:30,302:telegram.bot:DEBUG:  []
+2023-10-07 00:44:30,302:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:44:30,303:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:44:40,810:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:44:40,811:telegram.bot:DEBUG:  []
+2023-10-07 00:44:40,812:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:44:40,812:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:44:50,962:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:44:50,962:telegram.bot:DEBUG:  []
+2023-10-07 00:44:50,962:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:44:50,963:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:45:01,143:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:45:01,143:telegram.bot:DEBUG:  []
+2023-10-07 00:45:01,144:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:45:01,144:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:45:11,282:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:45:11,283:telegram.bot:DEBUG:  []
+2023-10-07 00:45:11,283:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:45:11,283:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:45:21,422:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:45:21,422:telegram.bot:DEBUG:  []
+2023-10-07 00:45:21,422:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:45:21,422:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:45:31,547:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:45:31,548:telegram.bot:DEBUG:  []
+2023-10-07 00:45:31,548:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:45:31,548:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:45:42,018:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:45:42,018:telegram.bot:DEBUG:  []
+2023-10-07 00:45:42,018:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:45:42,018:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:45:52,563:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:45:52,563:telegram.bot:DEBUG:  []
+2023-10-07 00:45:52,564:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:45:52,565:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:46:02,719:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:46:02,720:telegram.bot:DEBUG:  []
+2023-10-07 00:46:02,720:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:46:02,720:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:46:12,847:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:46:12,848:telegram.bot:DEBUG:  []
+2023-10-07 00:46:12,848:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:46:12,848:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:46:23,000:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:46:23,001:telegram.bot:DEBUG:  []
+2023-10-07 00:46:23,001:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:46:23,002:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:46:33,110:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:46:33,110:telegram.bot:DEBUG:  []
+2023-10-07 00:46:33,110:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:46:33,110:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:46:43,275:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:46:43,275:telegram.bot:DEBUG:  []
+2023-10-07 00:46:43,275:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:46:43,275:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:46:53,484:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:46:53,484:telegram.bot:DEBUG:  []
+2023-10-07 00:46:53,484:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:46:53,484:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:47:03,723:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:47:03,723:telegram.bot:DEBUG:  []
+2023-10-07 00:47:03,723:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:47:03,723:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:47:13,843:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:47:13,843:telegram.bot:DEBUG:  []
+2023-10-07 00:47:13,843:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:47:13,843:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:47:23,987:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:47:23,987:telegram.bot:DEBUG:  []
+2023-10-07 00:47:23,987:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:47:23,987:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:47:34,153:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:47:34,153:telegram.bot:DEBUG:  []
+2023-10-07 00:47:34,153:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:47:34,153:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:47:44,333:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:47:44,333:telegram.bot:DEBUG:  []
+2023-10-07 00:47:44,333:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:47:44,333:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:47:54,470:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:47:54,470:telegram.bot:DEBUG:  []
+2023-10-07 00:47:54,470:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:47:54,470:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:48:04,602:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:48:04,602:telegram.bot:DEBUG:  []
+2023-10-07 00:48:04,602:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:48:04,602:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:48:14,794:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:48:14,794:telegram.bot:DEBUG:  []
+2023-10-07 00:48:14,794:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:48:14,794:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:48:24,960:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:48:24,961:telegram.bot:DEBUG:  []
+2023-10-07 00:48:24,961:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:48:24,962:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:48:35,116:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:48:35,116:telegram.bot:DEBUG:  []
+2023-10-07 00:48:35,116:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:48:35,116:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:48:45,246:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:48:45,246:telegram.bot:DEBUG:  []
+2023-10-07 00:48:45,246:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:48:45,246:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:48:55,747:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:48:55,747:telegram.bot:DEBUG:  []
+2023-10-07 00:48:55,747:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:48:55,747:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:49:05,871:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:49:05,871:telegram.bot:DEBUG:  []
+2023-10-07 00:49:05,871:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:49:05,871:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:49:15,994:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:49:15,995:telegram.bot:DEBUG:  []
+2023-10-07 00:49:15,995:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:49:15,995:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:49:26,176:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:49:26,177:telegram.bot:DEBUG:  []
+2023-10-07 00:49:26,177:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:49:26,177:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:49:36,469:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:49:36,470:telegram.bot:DEBUG:  []
+2023-10-07 00:49:36,470:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:49:36,471:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:49:46,596:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:49:46,596:telegram.bot:DEBUG:  []
+2023-10-07 00:49:46,596:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:49:46,596:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:49:56,737:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:49:56,737:telegram.bot:DEBUG:  []
+2023-10-07 00:49:56,737:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:49:56,737:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:50:06,865:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:50:06,865:telegram.bot:DEBUG:  []
+2023-10-07 00:50:06,865:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:50:06,865:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:50:17,385:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:50:17,385:telegram.bot:DEBUG:  []
+2023-10-07 00:50:17,385:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:50:17,385:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:50:27,516:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:50:27,516:telegram.bot:DEBUG:  []
+2023-10-07 00:50:27,516:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:50:27,516:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:50:38,026:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:50:38,041:telegram.bot:DEBUG:  []
+2023-10-07 00:50:38,041:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:50:38,041:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:50:48,164:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:50:48,164:telegram.bot:DEBUG:  []
+2023-10-07 00:50:48,165:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:50:48,165:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:50:58,301:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:50:58,301:telegram.bot:DEBUG:  []
+2023-10-07 00:50:58,301:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:50:58,301:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:51:08,474:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:51:08,474:telegram.bot:DEBUG:  []
+2023-10-07 00:51:08,474:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:51:08,474:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:51:18,609:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:51:18,610:telegram.bot:DEBUG:  []
+2023-10-07 00:51:18,610:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:51:18,610:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:51:28,756:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:51:28,756:telegram.bot:DEBUG:  []
+2023-10-07 00:51:28,756:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:51:28,756:telegram.bot:DEBUG:  Entering: get_updates
+2023-10-07 00:51:38,884:telegram.bot:DEBUG:  No new updates found.
+2023-10-07 00:51:38,884:telegram.bot:DEBUG:  []
+2023-10-07 00:51:38,884:telegram.bot:DEBUG:  Exiting: get_updates
+2023-10-07 00:51:38,884:telegram.bot:DEBUG:  Entering: get_updates
