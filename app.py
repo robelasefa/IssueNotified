@@ -153,11 +153,8 @@ def get_issues(repo_owner, repo_name):
                                     \n-------------------------------------- \
                                     \n\n{issue_title}\n"
                         if issue_tags:
-                            try: 
-                                issue_str += f"\nTags: {', '.join(issue_tags_strings)}\n"
-                            except TypeError:
-                                print(issue_tags)
-
+                            issue_str += f"\nTags: {', '.join(issue_tags_strings)}\n"
+                            
                         if issue_description:
                             issue_str += f"\nDescription:\n{issue_description}\n"
 
@@ -380,7 +377,7 @@ def send_notification():
                         logger.info(f"User {items[2]} has deleted their account.")
                     else:
                         untrack_all_repos(items[2])   
-                        raise BotException("\n\tSomething went wrong with the user.")  # The exceptions is not BadRequest, raise a general exception
+                        raise BotException("\n\tSomething went wrong with the user'S account.")  # The exceptions is not BadRequest, raise a general exception
             except BotException as e:
                  logger.info(f"Failure to deliver messages to user {items[2]}: {e}")
             
@@ -389,7 +386,7 @@ def cancel():
     pass  # Do nothing
 
 def main():
-    # notify_new_features(sensitives.MESSAGE2)  # Send bot improvement messesages ONLY ONCE
+    # notify_new_features(sensitives.MESSAGE3)  # Send bot improvement messesages ONLY ONCE
 
     # This will manage the conversation to track new repository.
     conv_handler1 = ConversationHandler(
