@@ -20,7 +20,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 import telegram.error
 
 # Enable logging
-logging.basicConfig(filename='botmain.log', format='%(asctime)s:%(name)s:%(levelname)s:  %(message)s', level=logging.DEBUG)
+logging.basicConfig(filename='botmain.log', format='%(asctime)s:%(name)s:%(levelname)s:  %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 TELEGRAM_TOKEN = sensitives.TELEGRAM_TOKEN
@@ -147,19 +147,22 @@ def get_issues(repo_owner, repo_name):
                     if checked_issue(issue_id):
                         issue_url_button = InlineKeyboardButton(text='View Issue', url=issue_url)  # Define an InlineKeyboardButton object for the button
                         reply_markup = InlineKeyboardMarkup([[issue_url_button]])  # Create an InlineKeyboardMarkup object for the issue url
-
+                        
+                        ASSIGNEE_EMOJI = "\U0001F464"
+                        NOTE_EMOJI = "\U0001F4DD"
+                        TAG_EMOJI = "\U0001F3F7"
                         BELL_EMOJI = '\U0001F514'
                         issue_str = f"{BELL_EMOJI}New issue on {repo_name.capitalize()} \
                                     \n-------------------------------------- \
                                     \n\n{issue_title}\n"
                         if issue_tags:
-                            issue_str += f"\nTags: {', '.join(issue_tags_strings)}\n"
+                            issue_str += f"\n{TAG_EMOJI} Tags: {', '.join(issue_tags_strings)}\n"
                             
                         if issue_description:
-                            issue_str += f"\nDescription:\n{issue_description}\n"
+                            issue_str += f"\n{NOTE_EMOJI} Description:\n{issue_description}\n"
 
                         if issue_assignee:
-                            issue_str += f"\nAssignee: {issue_assignee}\n"
+                            issue_str += f"\n{ASSIGNEE_EMOJI} Assignee: {issue_assignee}\n"
 
                         issue_str += release_time_message
 

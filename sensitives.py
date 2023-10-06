@@ -3,7 +3,6 @@ BOT_NAME = 'IssueNotified'
 GITHUB_TOKEN = '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'
 DEVELOPERS = {"DEVELOPER_ROBEL_ID": 5347094985, "DEVELOPER_BEFEKADU_ID": 6167688485}
 COMMUNICATION_CODE = 'The king is back!'
-# sensitives.DEVELOPERS["DEVELOPER_ROBEL_ID"]
 
 # EMOJIS
 HUNDRED_POINTS = "\U0001F4AF"
@@ -34,6 +33,14 @@ BACK_ARROW_EMOJI = "\U0001F519"
 "🧨"    "\U0001F9E8"
 "💥"    "\U0001F4A5"
 "💫"    "\U0001F4AB"
+"💻"    "\U0001F4BB"
+"🏷️"    "\U0001F3F7"
+"📝"    "\U0001F4DD"
+"👤"     "\U0001F464"
+ASSIGNEE_EMOJI = "\U0001F464"
+NOTE_EMOJI = "\U0001F4DD"
+TAG_EMOJI = "\U0001F3F7"
+COMPUETER_EMOJI = "\U0001F4BB"
 
 # Update messages to send to users
 # Update 1
@@ -75,12 +82,13 @@ We're delighted to share some exciting news about IssueNotified!
 
 {SPRACLE_EMOJI} More informative notifications!
 
-IssueNotified can now send more informative notifications that include the issue tags, description, assignee, and time released. This will help you to stay up-to-date on the latest issues in your repositories without having to open GitHub.
+IssueNotified can now send more informative notifications that include the issue tags, description, assignee, and time released. This will help you to stay up-to-date on the latest issues in your repositories without having to open GitHub. \U0001F4BB
 
 No more missing important issues because you're not checking GitHub constantly. With more informative notifications from IssueNotified, you can stay on top of your issues even when you're busy. \U0001F680
 
 We hope you enjoy this new feature!
 
-Thanks for using IssueNotified, the bot that helps you stay on top of your GitHub issues!
+Thanks for using IssueNotified, the bot that helps you stay on top of your GitHub issues! \U0001F916
+
 The IssueNotified Team
 """

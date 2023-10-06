@@ -1,6 +1,6 @@
 from collections import Counter
 from pathlib import Path
-from datetime import datetime
+import datetime
 import time
 import json
 import logging
@@ -33,7 +33,7 @@ class BotDeveloper:
         self.timePath.write_text(str(timestamp))
 
     def _parse_timestamp(self, timestamp):
-        self.formatted_time = datetime.fromtimestamp(timestamp).strftime("%b %d, %Y %H:%M")
+        self.formatted_time = datetime.datetime.fromtimestamp(timestamp).strftime("%b %d, %Y %H:%M")
         return self.formatted_time
     
     def _read_number_of_users(self):
@@ -133,5 +133,3 @@ Please come back in {hours_left} hours and {minutes_left} minutes to check for a
             file.seek(0)
             json.dump(userData, file, indent=4)
             file.truncate()
-
-    
