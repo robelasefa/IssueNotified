@@ -12,6 +12,7 @@ CHECK_MARK_EMOJI = chr(0x2705)
 CROSS_MARK_EMOJI = chr(0x274C)
 SPRACLE_EMOJI = chr(0x2728)
 CLOCK_EMOJI = chr(0x23F0)
+BACK_ARROW_EMOJI = "\U0001F519"
 
 "👋"	"\U0001F44B"
 "🐛"	"\U0001F41B"
@@ -35,6 +36,7 @@ CLOCK_EMOJI = chr(0x23F0)
 "💫"    "\U0001F4AB"
 
 # Update messages to send to users
+# Update 1
 MESSAGE1 = f"""
 \U0001F44B Hi everyone,
 
@@ -45,9 +47,9 @@ We're happy to announce that we've made some improvements and bug fixes, and our
 Thank you for choosing our bot \U0001F916 . We're always looking for ways to improve, so please don't hesitate to share any feedback or questions in the comments section \U0001F4AC.
 """
 
-# This is the update message for my IssueNotified bot that is written to be sent to all users of the bot. But, when I prepare the message I forgot to include that the bot can now quickly send issue notifications with sound to their device, so that the users can get alerted to new messages and they will not miss updates. This helps them to respond in a timely manner. Could you please update the message in a way it includes this information?
+# Update 2
 MESSAGE2 = f"""
-\U0001F389 \U0001F680 IssueNotified Bot Update!  \U0001F389 \U0001F680
+\U0001F389 IssueNotified Bot Update!  \U0001F389 \U0001F680
 
 \U0001F44B Hi everyone,
 
@@ -61,4 +63,24 @@ Now, you can simply click on an inline button to untrack a repository, instead o
 We hope you enjoy the new features and improvements to the IssueNotified bot! Please let us know if you have any feedback or suggestions. \U0001F60A
 
 Thank you for using IssueNotified! \U0001F64F
+"""
+
+# Update 3
+MESSAGE3 = f"""
+\U0001F389 \U0001F680 IssueNotified is getting even better! \U0001F389
+
+\U0001F44B Hey there,
+
+We're delighted to share some exciting news about IssueNotified!
+
+{SPRACLE_EMOJI} More informative notifications!
+
+IssueNotified can now send more informative notifications that include the issue tags, description, assignee, and time released. This will help you to stay up-to-date on the latest issues in your repositories without having to open GitHub.
+
+No more missing important issues because you're not checking GitHub constantly. With more informative notifications from IssueNotified, you can stay on top of your issues even when you're busy. \U0001F680
+
+We hope you enjoy this new feature!
+
+Thanks for using IssueNotified, the bot that helps you stay on top of your GitHub issues!
+The IssueNotified Team
 """

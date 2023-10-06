@@ -11,6 +11,7 @@ from botdev import BotDeveloper
 import requests
 from pathlib import Path
 import json
+import datetime
 import re
 import threading
 import logging
@@ -115,6 +116,33 @@ def get_issues(repo_owner, repo_name):
                 issue_title = issue['issue']['title']
                 issue_url = issue['issue']['html_url']
                 issue_id = issue['id']
+                issue_tags = issue['issue']['labels']
+                issue_description = issue['issue']['body']
+                issue_assignee = issue['issue']['assignees'][0]['login'] if issue['issue']['assignees'] else None
+                issue_created_at = issue['created_at']
+                
+                release_time = datetime.datetime.strptime(issue_created_at, "%Y-%m-%dT%H:%M:%SZ")
+                now = datetime.datetime.now()  # Get the current time
+                time_difference = now - release_time  # Calculate the time difference between the issue creation time and the current time
+                
+                if time_difference.days > 0:  # If the time difference is greater than 1 day, format the time difference as a string
+                    if time_difference == 1:
+                        time_difference_string = f"a day ago"
+                    else:
+                        time_difference_string = f"{time_difference.days} days ago"
+                else:
+                    time_difference_string = ""
+
+                release_time_string = release_time.strftime('%Y-%m-%d %H:%M %p')
+                if time_difference_string:
+                    release_time_message = f"\nTime released: {release_time_string} ({time_difference_string})\n"
+                else:
+                   release_time_message = f"\nTime released: {release_time_string}\n"
+
+                issue_tags_strings = []
+                for issue_tag in issue_tags:
+                    issue_tags_strings.append(issue_tag['name'])
+                
                 try:
                     if checked_issue(issue_id):
                         issue_url_button = InlineKeyboardButton(text='View Issue', url=issue_url)  # Define an InlineKeyboardButton object for the button
@@ -123,7 +151,21 @@ def get_issues(repo_owner, repo_name):
                         BELL_EMOJI = '\U0001F514'
                         issue_str = f"{BELL_EMOJI}New issue on {repo_name.capitalize()} \
                                     \n-------------------------------------- \
-                                    \n\n{issue_title}"
+                                    \n\n{issue_title}\n"
+                        if issue_tags:
+                            try: 
+                                issue_str += f"\nTags: {', '.join(issue_tags_strings)}\n"
+                            except TypeError:
+                                print(issue_tags)
+
+                        if issue_description:
+                            issue_str += f"\nDescription:\n{issue_description}\n"
+
+                        if issue_assignee:
+                            issue_str += f"\nAssignee: {issue_assignee}\n"
+
+                        issue_str += release_time_message
+
                         old_issue(issue_id)
                         dev.repo_owners.append(repo_owner)
                         return issue_str, reply_markup
@@ -270,6 +312,7 @@ def list_repos(update, context):
 
     if user_id not in [user["user_id"] for user in userData] or not [user['data'] for user in userData if user['user_id'] == user_id]:
         msg = "Your repository list is empty."
+
     else:
         msg = 'Owner\t\t\t\t\t\t\tRepository'
         repoDictList = next((user['data'] for user in userData if user['user_id'] == user_id), None)
