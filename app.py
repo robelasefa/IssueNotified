@@ -20,7 +20,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 import telegram.error
 
 # Enable logging
-logging.basicConfig(filename='botlog.log', format='%(asctime)s:%(name)s:%(levelname)s:  %(message)s', level=logging.DEBUG)
+logging.basicConfig(filename='botmain.log', format='%(asctime)s:%(name)s:%(levelname)s:  %(message)s', level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 TELEGRAM_TOKEN = sensitives.TELEGRAM_TOKEN

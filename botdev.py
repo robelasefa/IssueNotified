@@ -18,7 +18,7 @@ class BotDeveloper:
 
         # Enable logging
         logging.basicConfig(
-            filename='botlog.log', format='%(asctime)s:%(name)s:%(levelname)s:  %(message)s', level=logging.DEBUG
+            filename='botdev.log', format='%(asctime)s:%(name)s:%(levelname)s:  %(message)s', level=logging.DEBUG
             )
         self.logger = logging.getLogger(__name__)
 
