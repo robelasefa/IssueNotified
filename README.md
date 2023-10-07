@@ -6,11 +6,9 @@ IssueNotified is a Telegram bot that sends notifications to users about new issu
 
 To use the bot, simply send the command `/start` to the bot. The bot will send you a message asking you to add your GitHub repository.
 
-You can add your repository by sending its name to the bot.
+To add your repository, send the bot its name in the format <owner, repo>.
 
 Once you have added your repository, the bot will start sending you notifications about new issues. You will receive a notification whenever a new issue is created, assigned to you, or updated.
-
-You can configure the frequency of notifications and the types of issues you want to receive notifications for by sending the command `/settings` to the bot.
 ## Commands
 
 The bot supports the following commands:
