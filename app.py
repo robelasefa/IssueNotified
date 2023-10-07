@@ -100,10 +100,56 @@ def remove_repo(user_id, repoDict):
 
     save_data(userDataPath, userData)
 
+def get_issue_info(issue):
+    """Gets the information of a single issue."""
+    issue_title = issue['issue']['title']
+    issue_url = issue['issue']['html_url']
+    issue_id = issue['id']
+    issue_tags = issue['issue']['labels']
+    issue_description = issue['issue']['body']
+    issue_assignee = issue['issue']['assignees'][0]['login'] if issue['issue']['assignees'] else None
+    issue_created_at = issue['created_at']
+
+    release_time = datetime.datetime.strptime(issue_created_at, "%Y-%m-%dT%H:%M:%SZ")
+    now = datetime.datetime.now()  # Get the current time
+    time_difference = now - release_time  # Calculate the time difference between the issue creation time and the current time
+
+    if time_difference.days > 0:  # If the time difference is greater than 1 day, format the time difference as a string
+        if time_difference == 1:
+            time_difference_string = f"a day ago"
+        else:
+            time_difference_string = f"{time_difference.days} days ago"
+    else:
+        time_difference_string = ""
+
+    release_time_string = release_time.strftime('%Y-%m-%d %H:%M %p')
+    if time_difference_string:
+        release_time_message = f"\nTime released: {release_time_string} ({time_difference_string})\n"
+    else:
+        release_time_message = f"\nTime released: {release_time_string}\n"
+
+    if issue_tags is not None and len(issue_tags) > 0:
+        issue_tags_strings = []
+        for issue_tag in issue_tags:
+            issue_tags_strings.append(issue_tag['name'])
+    else:
+        issue_tags_strings = None
+
+    issue_info = {
+    "title": issue_title,
+    "url": issue_url,
+    "id": issue_id,
+    "tags": issue_tags_strings,
+    "description": issue_description,
+    "assignee": issue_assignee,
+    "release_time_message": release_time_message
+  }
+
+    return issue_info
+
 def get_issues(repo_owner, repo_name):
     """Gets the list of issues in the specified repository."""
-    repo_url = "https://api.github.com/repos/{}/{}/issues/events".format(
-            repo_owner, repo_name)
+    repo_url = "https://api.github.com/repos/{}/{}/issues/events".format(repo_owner, repo_name)
     headers = {"Authorization": "bearer {}".format(GITHUB_TOKEN)}
     response = requests.get(repo_url, headers=headers)
 
@@ -113,35 +159,7 @@ def get_issues(repo_owner, repo_name):
         else:
             issues = json.loads(response.content)
             for issue in issues:
-                issue_title = issue['issue']['title']
-                issue_url = issue['issue']['html_url']
-                issue_id = issue['id']
-                issue_tags = issue['issue']['labels']
-                issue_description = issue['issue']['body']
-                issue_assignee = issue['issue']['assignees'][0]['login'] if issue['issue']['assignees'] else None
-                issue_created_at = issue['created_at']
-                
-                release_time = datetime.datetime.strptime(issue_created_at, "%Y-%m-%dT%H:%M:%SZ")
-                now = datetime.datetime.now()  # Get the current time
-                time_difference = now - release_time  # Calculate the time difference between the issue creation time and the current time
-                
-                if time_difference.days > 0:  # If the time difference is greater than 1 day, format the time difference as a string
-                    if time_difference == 1:
-                        time_difference_string = f"a day ago"
-                    else:
-                        time_difference_string = f"{time_difference.days} days ago"
-                else:
-                    time_difference_string = ""
-
-                release_time_string = release_time.strftime('%Y-%m-%d %H:%M %p')
-                if time_difference_string:
-                    release_time_message = f"\nTime released: {release_time_string} ({time_difference_string})\n"
-                else:
-                   release_time_message = f"\nTime released: {release_time_string}\n"
-
-                issue_tags_strings = []
-                for issue_tag in issue_tags:
-                    issue_tags_strings.append(issue_tag['name'])
+                issue_info = get_issue_info(issue)
                 
                 try:
                     if checked_issue(issue_id):
@@ -151,28 +169,30 @@ def get_issues(repo_owner, repo_name):
                         ASSIGNEE_EMOJI = "\U0001F464"
                         NOTE_EMOJI = "\U0001F4DD"
                         TAG_EMOJI = "\U0001F3F7"
-                        BELL_EMOJI = '\U0001F514'
+                        BELL_EMOJI = "\U0001F514"
                         issue_str = f"{BELL_EMOJI}New issue on {repo_name.capitalize()} \
                                     \n-------------------------------------- \
-                                    \n\n{issue_title}\n"
-                        if issue_tags:
-                            issue_str += f"\n{TAG_EMOJI} Tags: {', '.join(issue_tags_strings)}\n"
-                            
-                        if issue_description:
-                            issue_str += f"\n{NOTE_EMOJI} Description:\n{issue_description}\n"
+                                    \n\n{issue_info['title']}\n"
+                        if issue_info["tags"]:
+                            issue_str += f"\n{TAG_EMOJI} Tags: {', '.join(issue_info['tags'])}\n"
 
-                        if issue_assignee:
-                            issue_str += f"\n{ASSIGNEE_EMOJI} Assignee: {issue_assignee}\n"
+                        if issue_info["description"]:
+                            issue_str += f"\n{NOTE_EMOJI} Description:\n{issue_info['description']}\n"
 
-                        issue_str += release_time_message
+                        if issue_info["assignee"]:
+                            issue_str += f"\n{ASSIGNEE_EMOJI} Assignee: {issue_info['assignee']}\n"
 
-                        old_issue(issue_id)
+                        issue_str += issue_info["release_time_message"]
+
+                        old_issue(issue_info["id"])
                         dev.repo_owners.append(repo_owner)
                         return issue_str, reply_markup
                     else:
                         raise BotException("This issue isn't new.")
                 except BotException:
                     pass
+    else:
+        return None
 
 def prompt_repo_to_track(update, context):
     """Ask the user to provide the name and owner of the repository that they want to be tracked."""
@@ -362,27 +382,31 @@ def send_notification():
     if userData:
         iterableData = [(owner, repo, user['user_id']) for user in userData for repoDict in user['data'] for owner, repo in repoDict.items()]
         for items in iterableData:
-            new_issue, reply_markup = get_issues(items[0], items[1])
+            owner = items[0]
+            repo = items[1]
+            user_id = items[2]
+
+            new_issue, reply_markup = get_issues(owner, repo)
             try:
                 if new_issue is None:
-                    noRepoFound = f"There is no repository called '{items[1]}' under the ownership of '{items[0]}'."
-                    updater.bot.send_message(chat_id=items[2], text=noRepoFound)
-                    remove_repo(items[2], {items[0]: items[1]})
+                    noRepoFound = f"There is no repository called '{repo}' under the ownership of '{owner}'."
+                    updater.bot.send_message(chat_id=user_id, text=noRepoFound)
+                    remove_repo(user_id, {owner: repo})
                     dev.invalid_inputs += 1
                 else:
-                    updater.bot.send_message(chat_id=items[2], text=new_issue, reply_markup=reply_markup, disable_web_page_preview=True, disable_notification=False)
+                    updater.bot.send_message(chat_id=user_id, text=new_issue, reply_markup=reply_markup, disable_web_page_preview=True, disable_notification=False)
             except telegram.error.BadRequest as e:  # Remove the user's information from the database.
-                    if 'bot was blocked by the user' in str(e):
-                        untrack_all_repos(items[2])
-                        logger.info(f"User {items[2]} has blocked the bot.")
-                    elif 'user is deactivated' in str(e):
-                        untrack_all_repos(items[2])
-                        logger.info(f"User {items[2]} has deleted their account.")
-                    else:
-                        untrack_all_repos(items[2])   
-                        raise BotException("\n\tSomething went wrong with the user'S account.")  # The exceptions is not BadRequest, raise a general exception
+                if 'bot was blocked by the user' in str(e):
+                    untrack_all_repos(user_id)
+                    logger.info(f"User {user_id} has blocked the bot.")
+                elif 'user is deactivated' in str(e):
+                    untrack_all_repos(user_id)
+                    logger.info(f"User {user_id} has deleted their account.")
+                else:
+                    untrack_all_repos(user_id)
+                    raise BotException("\n\tSomething went wrong with the user's account.")  # The exceptions is not BadRequest, raise a general exception
             except BotException as e:
-                 logger.info(f"Failure to deliver messages to user {items[2]}: {e}")
+                 logger.info(f"Failure to deliver messages to user {user_id}: {e}")
             
 def cancel():
     """Conclude the conversation."""
