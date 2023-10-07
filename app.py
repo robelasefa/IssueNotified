@@ -125,9 +125,9 @@ def get_issue_info(issue):
     release_time_string = release_time.strftime('%Y-%m-%d %H:%M %p')
     CLOCK_EMOJI = chr(0x23F0)
     if time_difference_string:
-        release_time_message = f"\n{CLOCK_EMOJI}Time released: {release_time_string} ({time_difference_string})\n"
+        release_time_message = f"\n{CLOCK_EMOJI} Time released: {release_time_string} ({time_difference_string})\n"
     else:
-        release_time_message = f"\n{CLOCK_EMOJI}Time released: {release_time_string}\n"
+        release_time_message = f"\n{CLOCK_EMOJI} Time released: {release_time_string}\n"
 
     if issue_tags is not None and len(issue_tags) > 0:
         issue_tags_strings = []
