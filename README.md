@@ -2,7 +2,7 @@
 
 IssueNotified is a Telegram bot that sends notifications to users about new issues in their favorite repositories.
 
-***Note:** The bot is currently not able to be added to Telegram group or channel.
+**Note:** The bot is currently not able to be added to Telegram group or channel.
 
 To use the bot, simply send the command `/start` to the bot. The bot will send you a message asking you to add your GitHub repository.
 
@@ -19,7 +19,7 @@ The bot supports the following commands:
 * `/track`: Tracks a new GitHub repository.
 * `/untrack`: Removes a tracked GitHub repository.
 * `/list`: Lists all tracked GitHub repositories.
-* `/feedback`: Provides feedback on the bot's performance.
+* `/feedback`: allows users to provide feedback on the bot's performance. This feedback can be used to improve the bot's accuracy, features, and overall user experience.
 ## Support
 
 If you need help with the bot, please contact the developer at mikiasefa777@gmail.com
