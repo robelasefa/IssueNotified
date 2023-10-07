@@ -407,6 +407,7 @@ def send_notification():
                     untrack_all_repos(user_id)
                     raise BotException("\n\tSomething went wrong with the user's account.")  # The exceptions is not BadRequest, raise a general exception
             except BotException as e:
+                 untrack_all_repos(user_id)
                  logger.info(f"Failure to deliver messages to user {user_id}: {e}")
             
 def cancel():
