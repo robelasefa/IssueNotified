@@ -3,6 +3,7 @@ from pathlib import Path
 import datetime
 import time
 import json
+import re
 import logging
 
 import telegram.error
@@ -133,3 +134,33 @@ Please come back in {hours_left} hours and {minutes_left} minutes to check for a
             file.seek(0)
             json.dump(userData, file, indent=4)
             file.truncate()
+
+    def delete_sent_messages(self, interval, user_id=None):
+        """Deletes all the messages the bot has sent to either all users or a specific user in the last specified hour or minute interval."""
+        unit_match = re.search(r"(\d+)([h|m])", interval)
+
+        if unit_match:
+            number = int(unit_match.group(1))
+            unit = unit_match.group(2)
+            param_name = {
+                "h": "hours",
+                "m": "minutes"
+            }[unit]
+
+            start_time = datetime.datetime.now() - datetime.timedelta(**{param_name: number})
+
+            if start_time < datetime.datetime.now() - datetime.timedelta(hours=48):
+                raise ValueError("Cannot delete messages older than 48 hours.")
+
+            if user_id is None:
+                # Get all of the messages the bot has sent to all users since the start time.
+                messages = self.updater.bot.get_chat_messages(chat_id=-1, from_chat_id=self.updater.bot.get_me().id, after_date=start_time.timestamp())
+            else:
+                # Get all of the messages the bot has sent to the specified user since the start time.
+                messages = self.updater.bot.get_chat_messages(chat_id=user_id, from_chat_id=self.updater.bot.get_me().id, after_date=start_time.timestamp())
+
+            for message in messages:
+                self.updater.bot.delete_message(message.chat.id, message.message_id)
+        else:
+            raise ValueError("Invalid interval string: {}".format(interval))
+

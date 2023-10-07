@@ -137,14 +137,14 @@ def get_issue_info(issue):
         issue_tags_strings = None
 
     issue_info = {
-    "title": issue_title,
-    "url": issue_url,
-    "id": issue_id,
-    "tags": issue_tags_strings,
-    "description": issue_description,
-    "assignee": issue_assignee,
-    "release_time_message": release_time_message
-  }
+        "title": issue_title,
+        "url": issue_url,
+        "id": issue_id,
+        "tags": issue_tags_strings,
+        "description": issue_description,
+        "assignee": issue_assignee,
+        "release_time_message": release_time_message
+    }
 
     return issue_info
 
@@ -415,6 +415,7 @@ def cancel():
 
 def main():
     # notify_new_features(sensitives.MESSAGE3)  # Send bot improvement messesages ONLY ONCE
+    # dev.delete_sent_messages(interval="195m", user_id=sensitives.DEVELOPERS["DEVELOPER_ROBEL_ID"])
 
     # This will manage the conversation to track new repository.
     conv_handler1 = ConversationHandler(
