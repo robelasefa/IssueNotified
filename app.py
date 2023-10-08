@@ -307,14 +307,24 @@ def untrack_buttons_callback(update, context):
     query = update.callback_query
     user_id = update.effective_user.id
     
-    all_repo_removed_msg = "All clear! You have now untracked all of your repositories."
-    operation_cancelled_msg = 'Cancelled'
+    confirm_removing_all = "Do you really want to untrack all of your repositories?"
+    all_removed_msg = "All clear! You have now untracked all of your repositories."
+    operation_cancelled_msg = "Cancelled"
+    yes_no_keyboard = [
+        InlineKeyboardButton("Yes", callback_data="clear_all_repos"),
+        InlineKeyboardButton("No", callback_data="cancel_operation")
+        ]
+    yes_no_markup = InlineKeyboardMarkup(yes_no_keyboard)
 
     if query.data == "cancel":
         query.edit_message_text(text=operation_cancelled_msg, reply_markup=None)
     elif query.data == "remove_all":
-        untrack_all_repos(user_id)
-        query.edit_message_text(text=all_repo_removed_msg, reply_markup=None)
+        query.edit_message_text(text=confirm_removing_all, reply_markup=yes_no_markup)
+        if query.data == "clear_all_repos":
+            untrack_all_repos(user_id)
+            query.edit_message_text(text=all_removed_msg, reply_markup=None)
+        else:
+           query.edit_message_text(text=operation_cancelled_msg, reply_markup=None) 
     else:
         untrack_repo(user_id, query.data)
         repos = get_current_repos(user_id)
