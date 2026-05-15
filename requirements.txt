@@ -1,0 +1,6 @@
+python-telegram-bot[rate-limiter,job-queue]==21.5
+python-dotenv
+aiohttp
+pytest
+pytest-asyncio
+pytest-mock
