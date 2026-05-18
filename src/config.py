@@ -20,7 +20,12 @@ ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0"))
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 # Database configuration (SQLite)
-DATA_DIR = Path("data")
+# In Azure App Service Linux, only /home is persistent. We use /home/data in production
+# and fall back to local 'data' directory for local development.
+if os.path.exists("/home"):
+    DATA_DIR = Path("/home/data")
+else:
+    DATA_DIR = Path("data")
 
 # Webhook configuration
 WEBHOOK_BASE_URL = os.getenv("WEBHOOK_BASE_URL", "").rstrip("/")
