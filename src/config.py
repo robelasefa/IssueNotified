@@ -3,6 +3,7 @@ Configuration module for IssueNotified bot.
 """
 
 import os
+import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -21,7 +22,12 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 # Database configuration (SQLite)
 DATA_DIR = Path("data")
 
+# Webhook configuration
+WEBHOOK_BASE_URL = os.getenv("WEBHOOK_BASE_URL", "").rstrip("/")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", str(uuid.uuid4()))
+GITHUB_WEBHOOK_PATH = "/github/webhook"
+PORT = int(os.getenv("PORT", "8443"))
+
 # Bot settings
-ISSUE_CHECK_INTERVAL = int(os.getenv("ISSUE_CHECK_INTERVAL", "900"))  # 15 minutes
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "10"))
 MAX_REPOS_PER_USER = int(os.getenv("MAX_REPOS_PER_USER", "10"))

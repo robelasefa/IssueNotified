@@ -36,10 +36,9 @@ Example: `torvalds/linux`
 
 *Limits:*
 • Max {config.MAX_REPOS_PER_USER} tracked repositories per user
-• Notifications are checked every {config.ISSUE_CHECK_INTERVAL // 60} minutes
 
 *Features:*
-🔔 Automatic issue notifications
+🔔 Real-time issue notifications
 🔍 GitHub repository search with one-tap tracking
 """
     await update.message.reply_text(help_text.strip(), parse_mode="Markdown")

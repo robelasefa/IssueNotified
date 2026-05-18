@@ -15,6 +15,7 @@ from telegram.ext import (
 )
 
 from database import db
+from github import get_github_client
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,33 @@ def _parse_untrack_callback(data: str):
     return owner, name
 
 
-async def untrack_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _try_delete_webhook(owner: str, name: str) -> None:
+    """Delete the GitHub webhook for a repository if it exists and the repo
+    has no remaining subscribers.
+    """
+    repo_id = db.get_repository_id(owner, name)
+    if repo_id is None:
+        return
+
+    # Only delete if no subscribers remain
+    repo_data = db.get_repository_with_subscribers(owner, name)
+    if repo_data is not None:
+        # Still has subscribers
+        return
+
+    hook_id = db.get_webhook(repo_id)
+    if not hook_id:
+        return
+
+    github_client = get_github_client()
+    if github_client:
+        await github_client.delete_webhook(owner, name, hook_id)
+
+    db.remove_webhook(repo_id)
+    logger.info(f"Webhook removed for {owner}/{name}")
+
+
+async def untrack_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Show inline buttons for every tracked repository."""
     user_id = update.effective_user.id
     repositories = db.get_user_repositories(user_id)
@@ -62,7 +89,7 @@ async def untrack_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SELECT_REPO
 
 
-async def handle_untrack_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_untrack_callback(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Process the untrack button press."""
     query = update.callback_query
     await query.answer()
@@ -80,6 +107,8 @@ async def handle_untrack_callback(update: Update, context: ContextTypes.DEFAULT_
             f"✅ Stopped tracking `{owner}/{name}`.",
             parse_mode="Markdown",
         )
+        # Clean up the GitHub webhook if no subscribers remain
+        await _try_delete_webhook(owner, name)
     else:
         await query.edit_message_text(
             "❌ Could not remove that repository. It may have already been removed."
@@ -88,7 +117,7 @@ async def handle_untrack_callback(update: Update, context: ContextTypes.DEFAULT_
     return ConversationHandler.END
 
 
-async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cancel_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Cancel the untrack conversation."""
     await update.message.reply_text("❌ Untrack cancelled.")
     return ConversationHandler.END

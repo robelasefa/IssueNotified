@@ -1,6 +1,8 @@
-python-telegram-bot[rate-limiter,job-queue]==21.5
+python-telegram-bot[rate-limiter]==21.5
 python-dotenv
 aiohttp
+fastapi
+uvicorn[standard]
 pytest
 pytest-asyncio
 pytest-mock

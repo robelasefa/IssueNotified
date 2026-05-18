@@ -85,6 +85,17 @@ class DatabaseManager:
                 )
             """)
 
+            # Webhooks table — tracks GitHub webhooks installed on repositories
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS webhooks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    repository_id INTEGER NOT NULL UNIQUE,
+                    github_hook_id INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(repository_id) REFERENCES repositories(id)
+                )
+            """)
+
             conn.commit()
 
     # ------------------------------------------------------------------
@@ -154,6 +165,45 @@ class DatabaseManager:
                 return row[0] if row else None
         except sqlite3.Error as e:
             logger.error(f"Error fetching repository id for {owner}/{name}: {e}")
+            return None
+
+    def get_repository_with_subscribers(
+        self, owner: str, name: str
+    ) -> Optional[Dict[str, Any]]:
+        """Look up a repository by owner/name and return its ID and subscribers."""
+        try:
+            with self._connect() as conn:
+                row = conn.execute(
+                    """
+                    SELECT
+                        r.id,
+                        GROUP_CONCAT(u.user_id || ':' || IFNULL(ur.keywords, ''))
+                    FROM repositories r
+                    JOIN user_repositories ur ON r.id = ur.repository_id
+                    JOIN users u ON ur.user_id = u.user_id
+                    WHERE r.owner = ? AND r.name = ?
+                    GROUP BY r.id
+                    """,
+                    (owner, name),
+                ).fetchone()
+
+                if not row:
+                    return None
+
+                return {
+                    "repo_id": row[0],
+                    "subscribers": [
+                        {
+                            "user_id": int(s.split(":")[0]),
+                            "keywords": s.split(":")[1],
+                        }
+                        for s in row[1].split(",")
+                    ],
+                }
+        except sqlite3.Error as e:
+            logger.error(
+                f"Error fetching repository with subscribers {owner}/{name}: {e}"
+            )
             return None
 
     def link_user_repository(
@@ -426,17 +476,86 @@ class DatabaseManager:
             logger.error(f"Error getting top repositories: {e}")
             return []
 
-    def cleanup_unused_repositories(self):
-        """
-        Delete repositories that no longer have any subscribers.
-        Also removes their associated tracked issues to free up space.
-        """
+    # ------------------------------------------------------------------
+    # Webhook tracking
+    # ------------------------------------------------------------------
+
+    def add_webhook(self, repository_id: int, github_hook_id: int) -> bool:
+        """Record a GitHub webhook installation for a repository."""
         try:
             with self._connect() as conn:
                 conn.execute(
+                    "INSERT OR REPLACE INTO webhooks (repository_id, github_hook_id) VALUES (?, ?)",
+                    (repository_id, github_hook_id),
+                )
+                conn.commit()
+                return True
+        except sqlite3.Error as e:
+            logger.error(f"Error adding webhook for repo {repository_id}: {e}")
+            return False
+
+    def get_webhook(self, repository_id: int) -> Optional[int]:
+        """Return the GitHub hook ID for a repository, or None."""
+        try:
+            with self._connect() as conn:
+                row = conn.execute(
+                    "SELECT github_hook_id FROM webhooks WHERE repository_id = ?",
+                    (repository_id,),
+                ).fetchone()
+                return row[0] if row else None
+        except sqlite3.Error as e:
+            logger.error(f"Error fetching webhook for repo {repository_id}: {e}")
+            return None
+
+    def remove_webhook(self, repository_id: int) -> bool:
+        """Remove the webhook record for a repository."""
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    "DELETE FROM webhooks WHERE repository_id = ?", (repository_id,)
+                )
+                conn.commit()
+                return True
+        except sqlite3.Error as e:
+            logger.error(f"Error removing webhook for repo {repository_id}: {e}")
+            return False
+
+    # ------------------------------------------------------------------
+    # Cleanup
+    # ------------------------------------------------------------------
+
+    def cleanup_unused_repositories(self):
+        """
+        Delete repositories that no longer have any subscribers.
+        Also removes their associated tracked issues and webhook records.
+        """
+        try:
+            with self._connect() as conn:
+                # Remove webhook records for repos with no subscribers
+                conn.execute(
                     """
-                    DELETE FROM repositories 
-                    WHERE id NOT IN (SELECT DISTINCT repository_id FROM user_repositories)
+                    DELETE FROM webhooks
+                    WHERE repository_id NOT IN (
+                        SELECT DISTINCT repository_id FROM user_repositories
+                    )
+                    """
+                )
+                # Remove tracked issues for repos with no subscribers
+                conn.execute(
+                    """
+                    DELETE FROM tracked_issues
+                    WHERE repository_id NOT IN (
+                        SELECT DISTINCT repository_id FROM user_repositories
+                    )
+                    """
+                )
+                # Remove the repositories themselves
+                conn.execute(
+                    """
+                    DELETE FROM repositories
+                    WHERE id NOT IN (
+                        SELECT DISTINCT repository_id FROM user_repositories
+                    )
                     """
                 )
                 conn.commit()

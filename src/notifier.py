@@ -1,18 +1,18 @@
 """
 Background notification engine.
 
-Runs on a JobQueue schedule and pushes Telegram messages whenever new
-issues are opened in a tracked repository.
+Processes GitHub webhook events and sends Telegram notifications
+to subscribers of affected repositories.
 """
 
 import logging
 from typing import Any, Dict, List
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from database import db
-from github import get_github_client
+from github import format_webhook_issue, get_github_client
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,6 @@ def _format_notification(owner: str, repo: str, issue: dict) -> str:
     ]
 
     if description:
-        # Trim long bodies so the message stays readable
         excerpt = description[:300] + ("…" if len(description) > 300 else "")
         lines += ["", excerpt]
 
@@ -73,100 +72,93 @@ def _matches_keywords(issue_info: Dict[str, Any], keywords_str: str) -> bool:
     return False
 
 
-async def check_for_new_issues(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    JobQueue callback - called every `ISSUE_CHECK_INTERVAL` seconds.
+def _build_reply_markup(owner: str, name: str, issue_url: str):
+    """Build inline keyboard with View and Stop Tracking buttons."""
+    if not issue_url:
+        return None
+    keyboard = [
+        [
+            InlineKeyboardButton("🌐 View on GitHub", url=issue_url),
+            InlineKeyboardButton(
+                "🔕 Stop Tracking",
+                callback_data=f"untrack|{owner}|{name}",
+            ),
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
-    Fetches issue events once per repository (not once per subscriber),
-    marks new events as notified, then fans out Telegram messages to every
-    user who tracks that repository.
+
+async def process_github_webhook_event(payload: dict, bot: Bot) -> None:
+    """Process a GitHub webhook ``issues`` event and notify subscribers.
+
+    Called by the FastAPI GitHub webhook endpoint.
     """
-    github_client = get_github_client()
-    if not github_client:
-        logger.warning("Notification check skipped: GitHub client not initialised.")
+    action = payload.get("action")
+    if action not in ("opened", "closed", "reopened"):
         return
 
-    repos = db.get_all_tracked_repositories()
-    if not repos:
+    repository = payload.get("repository", {})
+    owner = repository.get("owner", {}).get("login", "")
+    repo_name = repository.get("name", "")
+
+    if not owner or not repo_name:
+        logger.warning("Webhook payload missing repository owner/name.")
         return
 
-    logger.info(f"Checking {len(repos)} tracked repositories for new issues…")
+    # Look up subscribers for this repository
+    repo_data = db.get_repository_with_subscribers(owner, repo_name)
+    if not repo_data:
+        logger.debug(f"No subscribers for {owner}/{repo_name}, skipping.")
+        return
 
-    for repo_entry in repos:
-        repo_id: int = repo_entry["repo_id"]
-        owner: str = repo_entry["owner"]
-        name: str = repo_entry["name"]
-        subscribers: List[Dict[str, Any]] = repo_entry["subscribers"]
-        last_checked: str = repo_entry.get("last_checked_at")
-        is_first_check = last_checked is None
+    repo_id = repo_data["repo_id"]
+    subscribers = repo_data["subscribers"]
+
+    # Normalise the webhook payload into our standard issue format
+    issue_info = format_webhook_issue(payload)
+    issue_id = issue_info["id"]
+
+    if not issue_id:
+        return
+
+    # Deduplicate: skip if already notified
+    if db.is_issue_tracked(issue_id):
+        return
+
+    # Record issue before sending to prevent duplicates on crash
+    db.add_tracked_issue(
+        issue_id=issue_id,
+        repository_id=repo_id,
+        title=issue_info.get("title", ""),
+        url=issue_info.get("url", ""),
+    )
+
+    message = _format_notification(owner, repo_name, issue_info)
+    reply_markup = _build_reply_markup(owner, repo_name, issue_info.get("url", ""))
+
+    logger.info(
+        f"Webhook: {action} issue #{issue_info.get('number')} in {owner}/{repo_name}"
+    )
+
+    for sub in subscribers:
+        uid = sub["user_id"]
+        keywords = sub["keywords"]
+
+        if not _matches_keywords(issue_info, keywords):
+            continue
 
         try:
-            tracked_ids = db.get_tracked_issue_ids_for_repo(repo_id)
-            new_issues = await github_client.get_new_issues(owner, name, tracked_ids)
-
-            if not new_issues:
-                continue
-
-            logger.info(f"Found {len(new_issues)} new issue(s) in {owner}/{name}")
-
-            for issue in new_issues:
-                issue_id = issue["id"]
-                # Persist before sending so a crash mid-loop doesn't re-send
-                db.add_tracked_issue(
-                    issue_id=issue_id,
-                    repository_id=repo_id,
-                    title=issue.get("title", ""),
-                    url=issue.get("url", ""),
-                )
-
-                if is_first_check:
-                    continue
-
-                message = _format_notification(owner, name, issue)
-
-                # Add inline button for the issue URL
-                reply_markup = None
-                if issue.get("url"):
-                    keyboard = [
-                        [
-                            InlineKeyboardButton("🌐 View on GitHub", url=issue["url"]),
-                            InlineKeyboardButton(
-                                "🔕 Stop Tracking",
-                                callback_data=f"untrack|{owner}|{name}",
-                            ),
-                        ]
-                    ]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-
-                for sub in subscribers:
-                    uid = sub["user_id"]
-                    keywords = sub["keywords"]
-
-                    if not _matches_keywords(issue, keywords):
-                        continue
-
-                    try:
-                        await context.bot.send_message(
-                            chat_id=uid,
-                            text=message,
-                            parse_mode="Markdown",
-                            reply_markup=reply_markup,
-                            disable_web_page_preview=True,
-                        )
-                    except Exception as e:
-                        logger.error(
-                            f"Failed to notify user {uid} about {owner}/{name}#{issue_id}: {e}"
-                        )
-
-            # If this is the first time we've checked this repo, we "seed" the state
-            # by marking existing issues as tracked without sending notifications.
-            # This prevents a flood of alerts when a user adds a popular repository.
-            if is_first_check:
-                logger.info(
-                    f"First-time check for {owner}/{name}: seeded state without notifying."
-                )
-
-            db.update_repository_last_checked(repo_id)
-
+            await bot.send_message(
+                chat_id=uid,
+                text=message,
+                parse_mode="Markdown",
+                reply_markup=reply_markup,
+                disable_web_page_preview=True,
+            )
         except Exception as e:
-            logger.error(f"Error processing {owner}/{name}: {e}")
+            logger.error(
+                f"Failed to notify user {uid} about "
+                f"{owner}/{repo_name}#{issue_id}: {e}"
+            )
+
+    db.update_repository_last_checked(repo_id)

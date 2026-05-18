@@ -1,5 +1,5 @@
 """
-GitHub API client with rate limiting.
+GitHub API client with rate limiting and webhook management.
 """
 
 import logging
@@ -138,7 +138,7 @@ class GitHubClient:
         return results
 
     # ------------------------------------------------------------------
-    # Issue events
+    # Issue events (kept for compatibility / fallback)
     # ------------------------------------------------------------------
 
     async def get_repository_issues_events(self, owner: str, repo: str) -> List[Dict]:
@@ -160,32 +160,7 @@ class GitHubClient:
         issue = issue_event["issue"]
         created_at = issue_event.get("created_at", "")
 
-        # Use UTC throughout to avoid local-timezone drift
-        try:
-            release_time = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ").replace(
-                tzinfo=timezone.utc
-            )
-            now = datetime.now(timezone.utc)
-            time_diff = now - release_time
-            total_seconds = int(time_diff.total_seconds())
-
-            if time_diff.days >= 1:
-                time_str = (
-                    f"{time_diff.days} day{'s' if time_diff.days > 1 else ''} ago"
-                )
-            elif total_seconds >= 3600:
-                hours = total_seconds // 3600
-                time_str = f"{hours} hour{'s' if hours > 1 else ''} ago"
-            elif total_seconds >= 60:
-                minutes = total_seconds // 60
-                time_str = f"{minutes} minute{'s' if minutes > 1 else ''} ago"
-            else:
-                time_str = "just now"
-
-            release_time_str = release_time.strftime("%Y-%m-%d %H:%M UTC")
-            time_message = f"\n🕐 {release_time_str} ({time_str})\n"
-        except ValueError:
-            time_message = "\n🕐 Time released: Unknown\n"
+        time_message = _format_time_message(created_at)
 
         labels = issue.get("labels", [])
         tags = [label["name"] for label in labels] if labels else []
@@ -221,6 +196,146 @@ class GitHubClient:
                     new_issues.append(issue_info)
 
         return new_issues
+
+    # ------------------------------------------------------------------
+    # Webhook management
+    # ------------------------------------------------------------------
+
+    async def create_webhook(
+        self, owner: str, repo: str, webhook_url: str, secret: str
+    ) -> Optional[int]:
+        """Create an issues webhook on a GitHub repository.
+
+        Returns the GitHub hook ID on success, or ``None`` if the request
+        failed (e.g. insufficient permissions).
+        """
+        await self.rate_limiter.wait_if_needed("github")
+
+        payload = {
+            "name": "web",
+            "active": True,
+            "events": ["issues"],
+            "config": {
+                "url": webhook_url,
+                "content_type": "json",
+                "secret": secret,
+                "insecure_ssl": "0",
+            },
+        }
+
+        try:
+            async with aiohttp.ClientSession(headers=self.headers) as session:
+                url = f"{self.base_url}/repos/{owner}/{repo}/hooks"
+                async with session.post(url, json=payload) as response:
+                    if response.status == 201:
+                        data = await response.json()
+                        logger.info(f"Webhook created for {owner}/{repo}")
+                        return data.get("id")
+                    else:
+                        body = await response.text()
+                        logger.warning(
+                            f"Failed to create webhook for {owner}/{repo}: "
+                            f"{response.status} — {body}"
+                        )
+                        return None
+        except Exception as e:
+            logger.error(f"Error creating webhook for {owner}/{repo}: {e}")
+            return None
+
+    async def delete_webhook(
+        self, owner: str, repo: str, hook_id: int
+    ) -> bool:
+        """Delete a webhook from a GitHub repository."""
+        await self.rate_limiter.wait_if_needed("github")
+
+        try:
+            async with aiohttp.ClientSession(headers=self.headers) as session:
+                url = f"{self.base_url}/repos/{owner}/{repo}/hooks/{hook_id}"
+                async with session.delete(url) as response:
+                    if response.status == 204:
+                        logger.info(f"Webhook {hook_id} deleted for {owner}/{repo}")
+                        return True
+                    else:
+                        logger.warning(
+                            f"Failed to delete webhook {hook_id} for {owner}/{repo}: "
+                            f"{response.status}"
+                        )
+                        return False
+        except Exception as e:
+            logger.error(f"Error deleting webhook for {owner}/{repo}: {e}")
+            return False
+
+
+# ---------------------------------------------------------------------------
+# Webhook payload formatter
+# ---------------------------------------------------------------------------
+
+
+def format_webhook_issue(payload: Dict) -> Dict[str, Any]:
+    """Convert a GitHub webhook ``issues`` event into the normalised format
+    used by the notification engine.
+
+    The output dict has the same shape as ``GitHubClient.format_issue_info``
+    so that ``_format_notification`` works without changes.
+    """
+    action = payload.get("action", "opened")
+    issue = payload.get("issue", {})
+
+    event_type = "closed" if action == "closed" else "opened"
+
+    created_at = issue.get("created_at", "")
+    time_message = _format_time_message(created_at)
+
+    labels = issue.get("labels", [])
+    tags = [label["name"] for label in labels] if labels else []
+
+    assignees = issue.get("assignees", [])
+    assignee = assignees[0]["login"] if assignees else None
+
+    return {
+        "id": str(issue.get("id", "")),
+        "title": issue.get("title", "No Title"),
+        "url": issue.get("html_url", ""),
+        "event_type": event_type,
+        "description": issue.get("body") or "",
+        "tags": tags,
+        "assignee": assignee,
+        "release_time_message": time_message,
+        "state": issue.get("state", "open"),
+        "number": issue.get("number"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+
+def _format_time_message(created_at: str) -> str:
+    """Return a human-readable time string from an ISO-8601 timestamp."""
+    try:
+        release_time = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc
+        )
+        now = datetime.now(timezone.utc)
+        time_diff = now - release_time
+        total_seconds = int(time_diff.total_seconds())
+
+        if time_diff.days >= 1:
+            time_str = f"{time_diff.days} day{'s' if time_diff.days > 1 else ''} ago"
+        elif total_seconds >= 3600:
+            hours = total_seconds // 3600
+            time_str = f"{hours} hour{'s' if hours > 1 else ''} ago"
+        elif total_seconds >= 60:
+            minutes = total_seconds // 60
+            time_str = f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+        else:
+            time_str = "just now"
+
+        release_time_str = release_time.strftime("%Y-%m-%d %H:%M UTC")
+        return f"\n🕐 {release_time_str} ({time_str})\n"
+    except ValueError:
+        return "\n🕐 Time released: Unknown\n"
 
 
 # ---------------------------------------------------------------------------

@@ -35,6 +35,34 @@ async def track_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
     return TRACK_REPO
 
 
+async def _try_create_webhook(owner: str, name: str, repo_id: int) -> None:
+    """Attempt to install a GitHub webhook on the repository.
+
+    Fails silently if the bot lacks permissions (e.g. user doesn't own the repo).
+    """
+    github_client = get_github_client()
+    if not github_client or not config.WEBHOOK_BASE_URL:
+        return
+
+    # Skip if a webhook is already installed
+    if db.get_webhook(repo_id):
+        return
+
+    webhook_url = f"{config.WEBHOOK_BASE_URL}{config.GITHUB_WEBHOOK_PATH}"
+    hook_id = await github_client.create_webhook(
+        owner, name, webhook_url, config.WEBHOOK_SECRET
+    )
+
+    if hook_id:
+        db.add_webhook(repo_id, hook_id)
+        logger.info(f"Webhook installed for {owner}/{name} (hook_id={hook_id})")
+    else:
+        logger.info(
+            f"Could not create webhook for {owner}/{name} — "
+            "user may need to add it manually."
+        )
+
+
 async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Validate, look up, and store the repository the user wants to track."""
     user_id = update.effective_user.id
@@ -107,6 +135,9 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE):
         msg += "\n\nYou'll be notified when new issues are opened or closed."
 
         await update.message.reply_text(msg, parse_mode="Markdown")
+
+        # Try to install a GitHub webhook (best-effort)
+        await _try_create_webhook(canonical_owner, canonical_name, repo_id)
     else:
         await update.message.reply_text(
             "❌ Failed to save the repository. Please try again."
