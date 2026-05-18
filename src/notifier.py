@@ -6,13 +6,12 @@ to subscribers of affected repositories.
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes
 
 from database import db
-from github import format_webhook_issue, get_github_client
+from github import format_webhook_issue
 
 logger = logging.getLogger(__name__)
 
@@ -157,8 +156,7 @@ async def process_github_webhook_event(payload: dict, bot: Bot) -> None:
             )
         except Exception as e:
             logger.error(
-                f"Failed to notify user {uid} about "
-                f"{owner}/{repo_name}#{issue_id}: {e}"
+                f"Failed to notify user {uid} about {owner}/{repo_name}#{issue_id}: {e}"
             )
 
     db.update_repository_last_checked(repo_id)

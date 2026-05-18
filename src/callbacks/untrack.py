@@ -80,6 +80,9 @@ async def untrack_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
         ]
         for repo in repositories
     ]
+    keyboard.append(
+        [InlineKeyboardButton("Cancel Untracking", callback_data="untrack|cancel")]
+    )
 
     await update.message.reply_text(
         "🗑️ *Select a repository to stop tracking:*",
@@ -95,6 +98,10 @@ async def handle_untrack_callback(update: Update, _: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if not query.data.startswith(_CB_PREFIX):
+        return ConversationHandler.END
+
+    if query.data == "untrack|cancel":
+        await query.edit_message_text("Untracking cancelled.")
         return ConversationHandler.END
 
     owner, name = _parse_untrack_callback(query.data)
