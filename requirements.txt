@@ -3,6 +3,7 @@ python-dotenv
 aiohttp
 fastapi
 uvicorn[standard]
+gunicorn
 pytest
 pytest-asyncio
 pytest-mock
