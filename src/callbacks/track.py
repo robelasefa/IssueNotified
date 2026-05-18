@@ -25,6 +25,17 @@ TRACK_REPO = 1
 
 async def track_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
     """Start repository tracking conversation."""
+    user_id = update.effective_user.id
+
+    # Enforce repo limit instantly before starting the conversation
+    if db.count_user_repositories(user_id) >= config.MAX_REPOS_PER_USER:
+        await update.message.reply_text(
+            f"⚠️ You are already tracking the maximum limit of {config.MAX_REPOS_PER_USER} repositories.\n\n"
+            "Please use /untrack to stop tracking some repositories first!",
+            parse_mode="Markdown",
+        )
+        return ConversationHandler.END
+
     await update.message.reply_text(
         "📌 *Track a repository*\n\n"
         "Send the repository in `owner/repo` format:\n"

@@ -193,10 +193,10 @@ async def handle_search_callback(update: Update, context: ContextTypes.DEFAULT_T
 
     # enforce per-user cap
     if db.count_user_repositories(user_id) >= config.MAX_REPOS_PER_USER:
-        await query.answer(
-            f"You've reached the {config.MAX_REPOS_PER_USER}-repo limit. "
-            "Untrack a repository first.",
-            show_alert=True,
+        await query.edit_message_text(
+            f"⚠️ You have reached your limit of {config.MAX_REPOS_PER_USER} tracked repositories.\n\n"
+            "Please untrack a repository first using /untrack before tracking new ones!",
+            parse_mode="Markdown",
         )
         return
 
