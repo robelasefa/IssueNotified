@@ -12,8 +12,14 @@ import hmac
 import json
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import cast
+
+# Dynamic path helper: ensure the current src/ directory is in Python's search path
+# so that internal imports like `from callbacks import ...` and `import config` resolve perfectly.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from telegram import (
