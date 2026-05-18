@@ -3,6 +3,7 @@ Broadcast command callback handlers (admin only).
 """
 
 import logging
+import warnings
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -13,6 +14,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from telegram.warnings import PTBUserWarning
 
 import config
 from database import db
@@ -139,6 +141,9 @@ async def cancel_broadcast(update: Update, _: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+warnings.filterwarnings(
+    action="ignore", message=r".*CallbackQueryHandler.*", category=PTBUserWarning
+)
 broadcast_conv_handler = ConversationHandler(
     entry_points=[CommandHandler("broadcast", broadcast_command)],
     states={

@@ -7,6 +7,7 @@ import hmac
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from src.webhook import verify_github_signature
 
 # ---------------------------------------------------------------------------
