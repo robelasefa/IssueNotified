@@ -7,6 +7,7 @@ import hmac
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from src.webhook import verify_github_signature
 
 # ---------------------------------------------------------------------------
 # GitHub signature verification
@@ -21,32 +22,24 @@ class TestGitHubSignatureVerification:
         digest = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
         return f"sha256={digest}"
 
-    @patch("webhook.WEBHOOK_SECRET", "test-secret")
+    @patch("src.webhook.WEBHOOK_SECRET", "test-secret")
     def test_valid_signature(self):
-        from webhook import verify_github_signature
-
         body = b'{"action": "opened"}'
         sig = self._sign(body, "test-secret")
         assert verify_github_signature(body, sig) is True
 
-    @patch("webhook.WEBHOOK_SECRET", "test-secret")
+    @patch("src.webhook.WEBHOOK_SECRET", "test-secret")
     def test_invalid_signature(self):
-        from webhook import verify_github_signature
-
         body = b'{"action": "opened"}'
         assert verify_github_signature(body, "sha256=bad") is False
 
-    @patch("webhook.WEBHOOK_SECRET", "test-secret")
+    @patch("src.webhook.WEBHOOK_SECRET", "test-secret")
     def test_missing_signature(self):
-        from webhook import verify_github_signature
-
         body = b'{"action": "opened"}'
         assert verify_github_signature(body, None) is False
 
-    @patch("webhook.WEBHOOK_SECRET", "")
+    @patch("src.webhook.WEBHOOK_SECRET", "")
     def test_empty_secret(self):
-        from webhook import verify_github_signature
-
         body = b'{"action": "opened"}'
         assert verify_github_signature(body, "sha256=anything") is False
 
@@ -60,7 +53,7 @@ class TestFormatWebhookIssue:
     """Tests for format_webhook_issue."""
 
     def test_opened_issue(self):
-        from github import format_webhook_issue
+        from src.github import format_webhook_issue
 
         payload = {
             "action": "opened",
@@ -86,7 +79,7 @@ class TestFormatWebhookIssue:
         assert result["number"] == 1
 
     def test_closed_issue(self):
-        from github import format_webhook_issue
+        from src.github import format_webhook_issue
 
         payload = {
             "action": "closed",
@@ -108,7 +101,7 @@ class TestFormatWebhookIssue:
         assert result["assignee"] is None
 
     def test_reopened_maps_to_opened(self):
-        from github import format_webhook_issue
+        from src.github import format_webhook_issue
 
         payload = {
             "action": "reopened",
@@ -163,10 +156,10 @@ class TestProcessGitHubWebhookEvent:
             },
         }
 
-    @patch("notifier.db")
+    @patch("src.notifier.db")
     @pytest.mark.asyncio
     async def test_skips_irrelevant_actions(self, mock_db, mock_bot):
-        from notifier import process_github_webhook_event
+        from src.notifier import process_github_webhook_event
 
         payload = {"action": "labeled", "repository": {}, "issue": {}}
         await process_github_webhook_event(payload, mock_bot)
@@ -174,20 +167,20 @@ class TestProcessGitHubWebhookEvent:
         mock_db.get_repository_with_subscribers.assert_not_called()
         mock_bot.send_message.assert_not_called()
 
-    @patch("notifier.db")
+    @patch("src.notifier.db")
     @pytest.mark.asyncio
     async def test_skips_untracked_repo(self, mock_db, mock_bot, sample_payload):
-        from notifier import process_github_webhook_event
+        from src.notifier import process_github_webhook_event
 
         mock_db.get_repository_with_subscribers.return_value = None
 
         await process_github_webhook_event(sample_payload, mock_bot)
         mock_bot.send_message.assert_not_called()
 
-    @patch("notifier.db")
+    @patch("src.notifier.db")
     @pytest.mark.asyncio
     async def test_notifies_subscribers(self, mock_db, mock_bot, sample_payload):
-        from notifier import process_github_webhook_event
+        from src.notifier import process_github_webhook_event
 
         mock_db.get_repository_with_subscribers.return_value = {
             "repo_id": 1,
@@ -203,10 +196,10 @@ class TestProcessGitHubWebhookEvent:
         assert mock_bot.send_message.call_count == 2
         mock_db.add_tracked_issue.assert_called_once()
 
-    @patch("notifier.db")
+    @patch("src.notifier.db")
     @pytest.mark.asyncio
     async def test_skips_already_tracked_issue(self, mock_db, mock_bot, sample_payload):
-        from notifier import process_github_webhook_event
+        from src.notifier import process_github_webhook_event
 
         mock_db.get_repository_with_subscribers.return_value = {
             "repo_id": 1,
@@ -217,10 +210,10 @@ class TestProcessGitHubWebhookEvent:
         await process_github_webhook_event(sample_payload, mock_bot)
         mock_bot.send_message.assert_not_called()
 
-    @patch("notifier.db")
+    @patch("src.notifier.db")
     @pytest.mark.asyncio
     async def test_keyword_filtering(self, mock_db, mock_bot, sample_payload):
-        from notifier import process_github_webhook_event
+        from src.notifier import process_github_webhook_event
 
         mock_db.get_repository_with_subscribers.return_value = {
             "repo_id": 1,
