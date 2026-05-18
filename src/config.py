@@ -22,7 +22,7 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 # Database configuration (SQLite)
 # In Azure App Service Linux, only /home is persistent. We use /home/data in production
 # and fall back to local 'data' directory for local development.
-if os.path.exists("/home"):
+if os.getenv("WEBSITE_INSTANCE_ID"):
     DATA_DIR = Path("/home/data")
 else:
     DATA_DIR = Path("data")
