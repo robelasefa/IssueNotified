@@ -14,7 +14,6 @@ def ai_client():
 
 @pytest.mark.asyncio
 async def test_ai_client_start_stop(ai_client):
-    """Test session lifecycle."""
     await ai_client.start()
     assert ai_client.session is not None
     await ai_client.stop()
@@ -23,7 +22,6 @@ async def test_ai_client_start_stop(ai_client):
 
 @pytest.mark.asyncio
 async def test_summarize_issue_success(ai_client, mocker):
-    """Test successful issue summarization."""
     await ai_client.start()
 
     mock_response = AsyncMock()
@@ -32,9 +30,6 @@ async def test_summarize_issue_success(ai_client, mocker):
         "candidates": [{"content": {"parts": [{"text": "This is a mock summary."}]}}]
     }
 
-    mocker.patch.object(ai_client.session, "post", return_value=mock_response)
-
-    # We must patch the context manager part of the session.post
     mock_context_manager = AsyncMock()
     mock_context_manager.__aenter__.return_value = mock_response
     mocker.patch.object(ai_client.session, "post", return_value=mock_context_manager)
@@ -47,7 +42,6 @@ async def test_summarize_issue_success(ai_client, mocker):
 
 @pytest.mark.asyncio
 async def test_summarize_issue_missing_key():
-    """Test summarization fails gracefully without API key."""
     client = AIClient()
     summary = await client.summarize_issue("Bug", "It crashes.")
     assert summary is None
@@ -55,7 +49,6 @@ async def test_summarize_issue_missing_key():
 
 @pytest.mark.asyncio
 async def test_polish_broadcast_success(ai_client, mocker):
-    """Test successful broadcast polishing."""
     await ai_client.start()
 
     mock_response = AsyncMock()

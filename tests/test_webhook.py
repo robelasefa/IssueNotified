@@ -1,7 +1,3 @@
-"""
-Tests for the webhook module — GitHub signature verification and event processing.
-"""
-
 import hashlib
 import hmac
 from unittest.mock import AsyncMock, patch
@@ -10,16 +6,9 @@ import pytest
 
 from src.webhook import verify_github_signature
 
-# ---------------------------------------------------------------------------
-# GitHub signature verification
-# ---------------------------------------------------------------------------
-
 
 class TestGitHubSignatureVerification:
-    """Tests for verify_github_signature."""
-
     def _sign(self, body: bytes, secret: str) -> str:
-        """Create a valid HMAC-SHA256 signature."""
         digest = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
         return f"sha256={digest}"
 
@@ -45,14 +34,7 @@ class TestGitHubSignatureVerification:
         assert verify_github_signature(body, "sha256=anything") is False
 
 
-# ---------------------------------------------------------------------------
-# Webhook issue formatting
-# ---------------------------------------------------------------------------
-
-
 class TestFormatWebhookIssue:
-    """Tests for format_webhook_issue."""
-
     def test_opened_issue(self):
         from src.github import format_webhook_issue
 
@@ -122,14 +104,7 @@ class TestFormatWebhookIssue:
         assert result["event_type"] == "opened"
 
 
-# ---------------------------------------------------------------------------
-# Webhook event processing
-# ---------------------------------------------------------------------------
-
-
 class TestProcessGitHubWebhookEvent:
-    """Tests for process_github_webhook_event."""
-
     @pytest.fixture
     def mock_bot(self):
         bot = AsyncMock()

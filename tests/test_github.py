@@ -8,18 +8,15 @@ from src.github import GitHubClient
 
 @pytest.fixture
 def client():
-    # We create a client with a fake token for testing
     return GitHubClient("fake_token")
 
 
 @pytest.mark.asyncio
 async def test_validate_repository_success(client):
-    """Test successful repository validation by mocking the GitHub response."""
     mock_response = AsyncMock(spec=aiohttp.ClientResponse)
     mock_response.status = 200
     mock_response.json = AsyncMock(return_value={"id": 123})
 
-    # Mocking ClientSession.get context manager
     mock_get = MagicMock()
     mock_get.__aenter__.return_value = mock_response
 
@@ -30,7 +27,6 @@ async def test_validate_repository_success(client):
 
 @pytest.mark.asyncio
 async def test_validate_repository_not_found(client):
-    """Test repository validation when the repository does not exist."""
     mock_response = AsyncMock(spec=aiohttp.ClientResponse)
     mock_response.status = 404
 
@@ -44,7 +40,6 @@ async def test_validate_repository_not_found(client):
 
 @pytest.mark.asyncio
 async def test_get_new_issues_filtering(client):
-    """Test fetching issues while filtering out already tracked IDs and wrong events."""
     events = [
         {
             "id": "1",
@@ -71,17 +66,14 @@ async def test_get_new_issues_filtering(client):
     mock_get.__aenter__.return_value = mock_response
 
     with patch("aiohttp.ClientSession.get", return_value=mock_get):
-        # "1" is already tracked, "2" is new (closed), "3" is ignored (wrong event type)
         new_issues = await client.get_new_issues("owner", "repo", {"1"})
 
-        # Should only find the 'closed' event "2"
         assert len(new_issues) == 1
         assert new_issues[0]["id"] == "2"
         assert new_issues[0]["event_type"] == "closed"
 
 
 def test_format_issue_info_mapping(client):
-    """Test that format_issue_info correctly maps GitHub event data to our internal format."""
     event = {
         "id": "event_id",
         "event": "opened",
