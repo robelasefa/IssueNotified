@@ -1,7 +1,3 @@
-"""
-Stats command callback handler (admin only).
-"""
-
 import logging
 
 from telegram import Update
@@ -13,12 +9,11 @@ from database import db
 logger = logging.getLogger(__name__)
 
 
-async def stats_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Handle /stats command (admin only)."""
+async def stats_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
 
     if user_id != config.ADMIN_USER_ID:
-        logger.warning(f"Unauthorized access attempt to /stats by user {user_id}")
+        logger.warning("Unauthorized access attempt to /stats by user %s", user_id)
         return
 
     stats = db.get_system_stats()

@@ -1,21 +1,12 @@
-"""
-List command callback handler.
-"""
-
-import logging
-
 from telegram import Update
 from telegram.ext import ContextTypes
 
 from database import db
 
-logger = logging.getLogger(__name__)
-
-_PAGE_SIZE = 10  # repositories per message
+_PAGE_SIZE = 10
 
 
-async def list_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Handle /list command."""
+async def list_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     repositories = db.get_user_repositories(user_id)
 

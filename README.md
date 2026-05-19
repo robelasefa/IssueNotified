@@ -1,37 +1,64 @@
 # IssueNotified Bot
 
-> Never miss a GitHub issue again — get telegram notifications the moment something is opened in your favorite repos.
+> Real-time Telegram notifications for GitHub issues — the moment they're opened, closed, or reopened.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
-[![python-telegram-bot](https://img.shields.io/badge/python--telegram--bot-v20+-green.svg)](https://python-telegram-bot.org/)
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-teal.svg)](https://fastapi.tiangolo.com/)
+[![python-telegram-bot](https://img.shields.io/badge/python--telegram--bot-v20+-green.svg)](https://python-telegram-bot.org/)
+
 ---
 
 ## Features
 
-- 🔔 **Real-time notifications** — receives GitHub webhook events the moment an issue is opened or closed
-- 🔍 **Repository search** — find repos by name or `owner/repo` and track them with one tap
-- 🗂️ **Easy management** — list, track, and untrack repositories via commands or inline buttons
-- 🏷️ **Keyword filtering** — only get notified when issues match terms you care about (e.g. `bug,critical`)
-- ✅ **Full issue lifecycle** — alerts for both opened and closed issues
-- 👑 **Admin tools** — broadcast messages and view system stats
-- ⚡ **Webhook-based** — no polling; events are pushed instantly via GitHub & Telegram webhooks
-- 🚀 **Heroku-ready** — deploys in minutes with the included `Procfile`
+- 🔔 **Instant notifications** — event-driven via GitHub webhooks, zero polling latency
+- ✨ **AI summaries** — every notification includes a 1-2 sentence Gemini-powered summary of the issue
+- 🔁 **Full issue lifecycle** — alerts for `opened`, `closed`, and `reopened` events
+- 🏷️ **Keyword filtering** — subscribe only to issues matching specific terms in title, body, or labels
+- 🔍 **Repository search** — find and track by name or `owner/repo` with inline one-tap tracking
+- 🗂️ **Easy management** — list and untrack repositories via commands or inline buttons on every notification
+- 👑 **Admin tools** — AI-polished broadcast messages and system stats
+- 🛡️ **HMAC-SHA256 signature verification** — all GitHub webhook payloads are cryptographically validated
+- ⚡ **Dual-webhook architecture** — PTB processes Telegram updates; FastAPI dispatches GitHub events
 
 ---
 
 ## Architecture
 
-IssueNotified runs as a **FastAPI** web server with two webhook endpoints:
+IssueNotified runs as a single **FastAPI** + **python-telegram-bot** process. PTB's built-in polling is disabled (`updater=None`); all updates arrive via webhooks managed in the FastAPI `lifespan` context.
 
-| Endpoint | Source | Purpose |
-|---|---|---|
-| `POST /telegram` | Telegram Bot API | Receives user messages and commands |
-| `POST /github/webhook` | GitHub | Receives issue events from tracked repositories |
-| `GET /health` | Monitoring | Health check |
+```
+                ┌──────────────────────────────────────────┐
+  Telegram ───▶ │  POST /telegram                          │
+                │  Verifies X-Telegram-Bot-Api-Secret-Token │
+                │  → PTB Application.process_update()       │
+                │                                           │
+  GitHub  ───▶  │  POST /github/webhook                    │
+                │  Verifies X-Hub-Signature-256 (HMAC-SHA256)│
+                │  → process_github_webhook_event()         │
+                │    ├─ Deduplicate via tracked_issues DB   │
+                │    ├─ AI summary (Gemini 3.1 Flash Lite)  │
+                │    └─ Send to all subscribers             │
+                │                                           │
+  Monitoring ─▶ │  GET /health                             │
+                └──────────────────────────────────────────┘
+```
 
-When a user tracks a repository, the bot attempts to install a GitHub webhook automatically. If permissions are insufficient (user doesn't own the repo), the webhook URL can be added manually.
+### AI Summarizer
+
+`src/ai.py` holds a single `AIClient` singleton that is lazy-initialized at startup. It calls the Gemini REST API directly over `aiohttp` with:
+
+- **Model:** `gemini-3.1-flash-lite` — chosen for its higher free-tier rate limit
+- **Retries:** 3 attempts with exponential backoff on `429` and `503` responses
+- **Timeout:** 15 s per request via `aiohttp.ClientTimeout`
+- **Graceful degradation:** if the API key is absent or every attempt fails, the notification falls back to a 280-character description excerpt
+
+### Request Rate Limiting
+
+`src/ratelimit.py` implements a sliding-window rate limiter:
+
+- **GitHub API:** 5,000 requests / hour (mirrors GitHub's authenticated limit)
+- **Webhook endpoints:** 60 requests / minute per IP (protects against DDoS floods)
 
 ---
 
@@ -39,36 +66,33 @@ When a user tracks a repository, the bot attempts to install a GitHub webhook au
 
 ```
 IssueNotified/
-├── .env.example          # Environment variable template
-├── .gitignore
-├── Procfile              # Heroku deployment
-├── runtime.txt           # Python version for Heroku
-├── README.md
-├── requirements.txt
 ├── src/
-│   ├── main.py           # Entry point — starts uvicorn
-│   ├── webhook.py        # FastAPI app with webhook endpoints
-│   ├── config.py         # Centralised configuration
-│   ├── database.py       # SQLite operations
-│   ├── github.py         # Async GitHub API client + webhook management
-│   ├── notifier.py       # Webhook event processor + notification engine
-│   ├── ratelimit.py      # Sliding-window rate limiter
+│   ├── main.py           # Entry point — configures logging, starts uvicorn
+│   ├── webhook.py        # FastAPI app: lifespan, middleware, route handlers
+│   ├── config.py         # All env-var config, validated at import time
+│   ├── notifier.py       # Webhook event processor + Telegram notification engine
+│   ├── github.py         # Async GitHub API client, webhook CRUD, payload normaliser
+│   ├── ai.py             # Gemini AI client with retry/backoff
+│   ├── database.py       # SQLite layer (WAL mode, FK enforcement, thread-safe RLock)
+│   ├── ratelimit.py      # Async sliding-window rate limiter
 │   ├── validators.py     # Input validation helpers
-│   ├── error.py          # Global error handler
-│   └── callbacks/        # One file per command
+│   ├── error.py          # Global PTB error handler
+│   └── callbacks/        # One module per bot command
 │       ├── start.py      # /start
 │       ├── help.py       # /help
-│       ├── track.py      # /track  (conversation handler + webhook install)
+│       ├── track.py      # /track  (conversation + auto webhook install)
 │       ├── untrack.py    # /untrack (inline buttons + webhook cleanup)
-│       ├── list.py       # /list   (paginated)
-│       ├── search.py     # /search + inline tracking
-│       ├── stop.py       # /stop   (account deletion)
+│       ├── list.py       # /list
+│       ├── search.py     # /search + inline one-tap tracking
+│       ├── stop.py       # /stop  (account deletion)
 │       ├── feedback.py   # /feedback
 │       ├── stats.py      # /stats  (admin only)
-│       └── broadcast.py  # /broadcast (admin only)
+│       └── broadcast.py  # /broadcast (admin, AI-polished)
+├── tests/                # pytest suite — 36 tests
 ├── data/                 # SQLite database (auto-created)
-├── logs/                 # Log files (auto-created)
-└── tests/                # Pytest test suite
+├── .env.example
+├── requirements.txt
+└── README.md
 ```
 
 ---
@@ -77,18 +101,19 @@ IssueNotified/
 
 ### Prerequisites
 
-- Python 3.10 or higher
-- A Telegram bot token from [@BotFather](https://t.me/BotFather)
-- A GitHub Personal Access Token (classic, `repo` + `admin:repo_hook` scopes)
-- A publicly reachable HTTPS URL (Heroku, Render, or ngrok for local dev)
+- Python 3.12+
+- Telegram bot token from [@BotFather](https://t.me/BotFather)
+- GitHub Personal Access Token (classic, `repo` + `admin:repo_hook` scopes)
+- Google Gemini API key — free tier at [ai.google.dev](https://ai.google.dev)
+- A publicly reachable HTTPS URL (ngrok for local dev, Azure / Heroku for production)
 
-### 1. Clone and install
+### 1. Clone & install
 
 ```bash
 git clone https://github.com/robelasefa/IssueNotified.git
 cd IssueNotified
 python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
@@ -98,125 +123,146 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Open `.env` and fill in:
+| Variable | Required | Description |
+|---|---|---|
+| `BOT_TOKEN` | ✅ | Production bot token from @BotFather |
+| `DEV_BOT_TOKEN` | — | Separate token used when `DEBUG=true` |
+| `GITHUB_TOKEN` | ✅ | GitHub PAT (`repo` + `admin:repo_hook` scopes) |
+| `GEMINI_API_KEY` | — | Google Gemini API key — enables AI summaries |
+| `ADMIN_USER_ID` | — | Your Telegram user ID — unlocks `/stats` and `/broadcast` |
+| `WEBHOOK_BASE_URL` | ✅ | Public HTTPS root URL (no trailing slash) |
+| `WEBHOOK_SECRET` | ✅ (prod) | Shared secret for GitHub webhook HMAC validation |
+| `PORT` | — | Server port (default: `8443`; Azure sets this automatically) |
+| `DEBUG` | — | `true` → use `DEV_BOT_TOKEN` + verbose logging |
+| `MAX_REPOS_PER_USER` | — | Per-user repository cap (default: `10`) |
 
-| Variable | Description |
-|---|---|
-| `BOT_TOKEN` | Production bot token from @BotFather |
-| `DEV_BOT_TOKEN` | (Optional) Separate token for testing |
-| `GITHUB_TOKEN` | GitHub PAT with `repo` + `admin:repo_hook` scopes |
-| `ADMIN_USER_ID` | Your Telegram user ID — unlocks `/stats` and `/broadcast` |
-| `WEBHOOK_BASE_URL` | Public HTTPS URL (e.g. `https://your-app.herokuapp.com`) |
-| `WEBHOOK_SECRET` | Shared secret for GitHub webhook HMAC validation (auto-generated if empty) |
-| `PORT` | Server port (default: `8443`, Heroku sets this automatically) |
-| `DEBUG` | Set to `true` to use `DEV_BOT_TOKEN` and verbose logging |
-| `MAX_REPOS_PER_USER` | Per-user repository cap (default: `10`) |
-
-> **Never commit your `.env` file.** It's already in `.gitignore`.
+> **Never commit `.env`.** It is already excluded by `.gitignore`.
 
 ### 3. Run locally
 
 ```bash
-# Option A: Use ngrok for a public HTTPS URL
+# Expose a public HTTPS URL for webhooks
 ngrok http 8443
-# Copy the https URL to WEBHOOK_BASE_URL in .env
+# Copy the https://... URL into WEBHOOK_BASE_URL in .env
 
-# Option B: Direct start
 python src/main.py
 ```
 
-### 4. Deploy to Heroku
+### 4. Deploy to Azure App Service
 
 ```bash
-heroku create your-app-name
-heroku config:set BOT_TOKEN=... GITHUB_TOKEN=... WEBHOOK_BASE_URL=https://your-app-name.herokuapp.com WEBHOOK_SECRET=... ADMIN_USER_ID=...
-git push heroku feature/webhook-fastapi:main
+az webapp config appsettings set --name <app> --resource-group <rg> \
+  --settings BOT_TOKEN=... GITHUB_TOKEN=... GEMINI_API_KEY=... \
+             WEBHOOK_BASE_URL=https://<app>.azurewebsites.net \
+             WEBHOOK_SECRET=... ADMIN_USER_ID=...
 ```
+
+The `WEBSITE_INSTANCE_ID` environment variable set by Azure is detected automatically; the database will be persisted to `/home/data/` instead of the local `data/` directory.
 
 ---
 
-## Commands
+## Bot Commands
 
-### User commands
+### User
 
 | Command | Description |
 |---|---|
-| `/start` | Register your account |
-| `/help` | Show all commands |
-| `/track` | Track a new repository |
+| `/start` | Register and receive a welcome message |
+| `/track` | Start tracking a repository |
 | `/untrack` | Stop tracking a repository |
 | `/list` | View all your tracked repositories |
-| `/search <query>` | Search GitHub — by name or `owner/repo` |
+| `/search <query>` | Search GitHub by name or `owner/repo` |
 | `/feedback` | Send feedback to the developer |
-| `/stop` | Delete your account and all data |
+| `/stop` | Delete your account and all tracked data |
+| `/help` | Show the command reference |
 
-### Admin commands
+### Admin (`ADMIN_USER_ID` only)
 
 | Command | Description |
 |---|---|
-| `/stats` | System stats — total users, popular repos |
-| `/broadcast <message>` | Send a message to all users (Markdown supported) |
+| `/stats` | Users, repositories, and tracked-issue counts |
+| `/broadcast <message>` | AI-polished announcement sent to all users |
 
 ---
 
 ## Feature Highlights
 
+### AI Issue Summaries
+
+Each notification is augmented with a concise 1-2 sentence summary generated by **Gemini 3.1 Flash Lite**. The summarizer gracefully degrades to a 280-character excerpt if the API is unavailable or rate-limited, with automatic retry and exponential backoff built in.
+
 ### Keyword Filtering
 
-When tracking a repository you can supply comma-separated keywords. You'll only be notified when the issue title, body, or labels match at least one of them — useful for large projects where you only care about specific topics.
+Filter per-repository so you're only alerted when an issue's title, body, or labels match at least one of your keywords:
 
 ```
 /track
 > facebook/react
-> bug,performance
+> bug,performance,memory
 ```
 
-### One-tap Stop Tracking
-
-Every notification includes a **🔕 Stop Tracking** inline button. Tapping it asks for confirmation before untracking, so accidental taps don't lose your subscription.
-
-### Smart Search
+### Notification Format
 
 ```
-/search react              # full-text search across GitHub
-/search facebook/react     # scoped to a specific owner
+🔔 NEW ISSUE • facebook/react
+
+#42 — Application crashes on startup with out of memory error
+🕐 2026-05-19 01:45 PM UTC (6 minutes ago)
+
+🏷️ `bug`  `docker`  👤 @contributor
+
+✨ AI Summary:
+The application fails to launch with a Java heap OutOfMemoryError inside Docker.
+Increase container memory allocation or tune JVM heap settings.
 ```
 
-Results appear as an inline list with a **➕ Track** button on each entry.
+Every notification includes a **🌐 View on GitHub** link and a **🔕 Stop Tracking** inline button.
 
 ### Automatic Webhook Installation
 
-When you track a repository you own (or have admin access to), the bot automatically installs a GitHub webhook. For repos you don't own, you can manually add the webhook URL shown by the bot.
+When you track a repository you have admin access to, the bot installs a GitHub webhook automatically and stores the hook ID in the database. Untracking removes it cleanly. For repositories you don't own, the bot displays the webhook URL to add manually.
+
+### Deduplication
+
+Issue IDs are recorded in SQLite before notifications are dispatched. A crash mid-send will not re-notify on restart.
+
+---
+
+## Running Tests
+
+```bash
+venv\Scripts\python -m pytest          # Windows
+source venv/bin/activate && pytest     # Linux/macOS
+```
+
+36 tests covering the AI client, database layer, GitHub client, notification formatter, validators, and webhook routes.
 
 ---
 
 ## Troubleshooting
 
-| Problem | Fix |
+| Symptom | Resolution |
 |---|---|
-| Bot not responding | Check `DEBUG` in `.env` — make sure you're messaging the right bot token |
-| GitHub API errors (403) | Verify your token has `repo` and `admin:repo_hook` scopes and hasn't expired |
-| Notifications not arriving | Confirm `WEBHOOK_BASE_URL` is set and reachable; check logs |
-| Webhook creation fails | You may not have admin access to the repo — add the webhook URL manually |
-| Database errors | Ensure the `data/` directory is writable; restart to reinitialise |
-
-Enable verbose logging at any time by setting `DEBUG=true` in `.env`.
+| Bot not responding | Confirm the correct token is active (`DEBUG=true` uses `DEV_BOT_TOKEN`) |
+| No AI summary | Check `GEMINI_API_KEY` is set; inspect logs for `Gemini API error` |
+| GitHub API 403 | Token may be missing `admin:repo_hook` scope or has expired |
+| Notifications not arriving | Verify `WEBHOOK_BASE_URL` is publicly reachable and the GitHub webhook is active |
+| Webhook creation fails | You may lack admin access — add the webhook URL shown by the bot manually |
+| Database errors on Azure | Ensure `/home/data/` exists; set `WEBSITE_INSTANCE_ID` is populated by the platform |
 
 ---
 
 ## Contributing
 
-Contributions are welcome! For small fixes, open a PR directly. For larger changes, please open an issue first so we can discuss the approach.
-
-If you find this project useful, a ⭐ on GitHub helps others discover it — thank you!
+Small fixes — open a PR directly. Larger changes — open an issue first to align on approach.
 
 ---
 
 ## License
 
-[MIT](LICENSE) — free to use, modify, and distribute with attribution.
+[MIT](LICENSE)
 
 ## Contact
 
 - Bug reports & feature requests → [GitHub Issues](https://github.com/robelasefa/IssueNotified/issues)
-- Direct feedback → `/feedback` inside the bot
+- Direct feedback → `/feedback` in the bot

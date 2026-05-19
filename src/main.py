@@ -1,9 +1,3 @@
-"""
-Main entry point for IssueNotified bot.
-
-Starts the FastAPI webhook server via uvicorn.
-"""
-
 import logging
 
 from config import DEBUG, PORT
@@ -16,8 +10,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
-def main():
-    """Start the webhook server."""
+def main() -> None:
     import uvicorn
 
     logger.info("Starting IssueNotified webhook server…")

@@ -1,17 +1,8 @@
-"""
-Feedback command callback handler.
-"""
-
-import logging
-
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-logger = logging.getLogger(__name__)
 
-
-async def feedback_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Handle /feedback command."""
+async def feedback_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     feedback_text = (
         "📣 *Feedback & Support*\n\n"
         "Do you have suggestions, bugs to report, or need help? "

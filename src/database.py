@@ -1,7 +1,3 @@
-"""
-Database module for IssueNotified bot using SQLite.
-"""
-
 import logging
 import sqlite3
 import threading
@@ -13,8 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseManager:
-    """Manages SQLite database operations for bot."""
-
     def __init__(self, db_path: Optional[str] = None):
         if db_path:
             self.db_path = db_path
@@ -26,19 +20,15 @@ class DatabaseManager:
         self.init_database()
 
     def _connect(self) -> sqlite3.Connection:
-        """Open a connection with WAL mode and foreign key enforcement."""
         conn = sqlite3.connect(self.db_path)
+        # WAL mode reduces lock contention; foreign keys enforce integrity.
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
 
-    def init_database(self):
-        """Initialize database tables."""
-
+    def init_database(self) -> None:
         with self._connect() as conn:
             cursor = conn.cursor()
-
-            # Users table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     user_id INTEGER PRIMARY KEY,
@@ -47,8 +37,6 @@ class DatabaseManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-
-            # Repositories table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS repositories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,8 +47,6 @@ class DatabaseManager:
                     UNIQUE(owner, name)
                 )
             """)
-
-            # User repositories table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS user_repositories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,8 +59,6 @@ class DatabaseManager:
                     FOREIGN KEY(repository_id) REFERENCES repositories(id)
                 )
             """)
-
-            # Tracked issues table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS tracked_issues (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,7 +71,7 @@ class DatabaseManager:
                 )
             """)
 
-            # Webhooks table — tracks GitHub webhooks installed on repositories
+            # webhooks table — tracks GitHub webhooks installed on repositories
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS webhooks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,14 +84,12 @@ class DatabaseManager:
 
             conn.commit()
 
-    # ------------------------------------------------------------------
-    # Users
-    # ------------------------------------------------------------------
-
     def add_user(
-        self, user_id: int, username: str = None, first_name: str = None
+        self,
+        user_id: int,
+        username: Optional[str] = None,
+        first_name: Optional[str] = None,
     ) -> bool:
-        """Add a new user to database."""
         with self._lock:
             try:
                 with self._connect() as conn:
@@ -118,14 +100,12 @@ class DatabaseManager:
                     conn.commit()
                     return True
             except sqlite3.Error as e:
-                logger.error(f"Error adding user: {e}")
+                logger.error("Error adding user %s: %s", user_id, e)
                 return False
 
     def delete_user(self, user_id: int) -> bool:
-        """Remove a user and all their repository links from the database."""
         with self._lock:
             try:
-                # Find repository IDs this user was tracking to potentially clean them up
                 with self._connect() as conn:
                     rows = conn.execute(
                         "SELECT repository_id FROM user_repositories WHERE user_id = ?",
@@ -139,20 +119,14 @@ class DatabaseManager:
                     conn.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
                     conn.commit()
 
-                    # Clean up unused repositories
                     for repo_id in repo_ids:
                         self.cleanup_repository_if_unused(repo_id)
                     return True
             except sqlite3.Error as e:
-                logger.error(f"Error deleting user {user_id}: {e}")
+                logger.error("Error deleting user %s: %s", user_id, e)
                 return False
 
-    # ------------------------------------------------------------------
-    # Repositories
-    # ------------------------------------------------------------------
-
     def add_repository(self, owner: str, name: str) -> Optional[int]:
-        """Insert a repository if not present and return its ID."""
         with self._lock:
             try:
                 with self._connect() as conn:
@@ -167,11 +141,10 @@ class DatabaseManager:
                     conn.commit()
                     return row[0] if row else None
             except sqlite3.Error as e:
-                logger.error(f"Error adding repository {owner}/{name}: {e}")
+                logger.error("Error adding repository %s/%s: %s", owner, name, e)
                 return None
 
     def get_repository_id(self, owner: str, name: str) -> Optional[int]:
-        """Return the DB id for a repository, or None if not found."""
         try:
             with self._connect() as conn:
                 row = conn.execute(
@@ -180,13 +153,12 @@ class DatabaseManager:
                 ).fetchone()
                 return row[0] if row else None
         except sqlite3.Error as e:
-            logger.error(f"Error fetching repository id for {owner}/{name}: {e}")
+            logger.error("Error fetching repository id for %s/%s: %s", owner, name, e)
             return None
 
     def get_repository_with_subscribers(
         self, owner: str, name: str
     ) -> Optional[Dict[str, Any]]:
-        """Look up a repository by owner/name and return its ID and subscribers."""
         try:
             with self._connect() as conn:
                 rows = conn.execute(
@@ -201,39 +173,30 @@ class DatabaseManager:
                 ).fetchall()
 
                 if not rows:
-                    # Check if repository exists at all but has no subscribers
                     repo_id = self.get_repository_id(owner, name)
                     if not repo_id:
                         return None
                     return {"repo_id": repo_id, "subscribers": []}
 
-                repo_id = rows[0][0]
-                subscribers = []
-                for row in rows:
-                    subscribers.append({"user_id": row[1], "keywords": row[2]})
-
                 return {
-                    "repo_id": repo_id,
-                    "subscribers": subscribers,
+                    "repo_id": rows[0][0],
+                    "subscribers": [{"user_id": r[1], "keywords": r[2]} for r in rows],
                 }
         except sqlite3.Error as e:
             logger.error(
-                f"Error fetching repository with subscribers {owner}/{name}: {e}"
+                "Error fetching repository with subscribers %s/%s: %s", owner, name, e
             )
             return None
 
     def link_user_repository(
         self, user_id: int, repository_id: int, keywords: Optional[str] = None
     ) -> bool:
-        """Link a user to a repository with optional keyword filters."""
         with self._lock:
             try:
                 with self._connect() as conn:
-                    # Ensure the user exists in the users table first (Foreign Key requirement)
                     conn.execute(
                         "INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,)
                     )
-
                     conn.execute(
                         """
                         INSERT OR IGNORE INTO user_repositories (user_id, repository_id, keywords)
@@ -245,12 +208,11 @@ class DatabaseManager:
                     return True
             except sqlite3.Error as e:
                 logger.error(
-                    f"Error linking user {user_id} to repo {repository_id}: {e}"
+                    "Error linking user %s to repo %s: %s", user_id, repository_id, e
                 )
                 return False
 
     def get_user_repositories(self, user_id: int) -> List[Dict[str, Any]]:
-        """Return all repositories tracked by a user."""
         try:
             with self._connect() as conn:
                 rows = conn.execute(
@@ -268,11 +230,10 @@ class DatabaseManager:
                     for row in rows
                 ]
         except sqlite3.Error as e:
-            logger.error(f"Error getting repositories for user {user_id}: {e}")
+            logger.error("Error getting repositories for user %s: %s", user_id, e)
             return []
 
     def count_user_repositories(self, user_id: int) -> int:
-        """Return how many repositories a user is currently tracking."""
         try:
             with self._connect() as conn:
                 row = conn.execute(
@@ -281,11 +242,10 @@ class DatabaseManager:
                 ).fetchone()
                 return row[0] if row else 0
         except sqlite3.Error as e:
-            logger.error(f"Error counting repositories for user {user_id}: {e}")
+            logger.error("Error counting repositories for user %s: %s", user_id, e)
             return 0
 
     def is_user_tracking_repository(self, user_id: int, owner: str, name: str) -> bool:
-        """Check if user is already tracking a specific repository."""
         try:
             with self._connect() as conn:
                 row = conn.execute(
@@ -299,11 +259,10 @@ class DatabaseManager:
                 ).fetchone()
                 return row is not None
         except sqlite3.Error as e:
-            logger.error(f"Error checking tracking status for user {user_id}: {e}")
+            logger.error("Error checking tracking status for user %s: %s", user_id, e)
             return False
 
     def remove_user_repository(self, user_id: int, owner: str, name: str) -> bool:
-        """Remove a single repository from a user's tracking list."""
         with self._lock:
             try:
                 repo_id = self.get_repository_id(owner, name)
@@ -325,11 +284,12 @@ class DatabaseManager:
 
                     return result.rowcount > 0
             except sqlite3.Error as e:
-                logger.error(f"Error removing {owner}/{name} for user {user_id}: {e}")
+                logger.error(
+                    "Error removing %s/%s for user %s: %s", owner, name, user_id, e
+                )
                 return False
 
     def remove_all_user_repositories(self, user_id: int) -> bool:
-        """Remove all repositories for a user."""
         with self._lock:
             try:
                 with self._connect() as conn:
@@ -344,20 +304,16 @@ class DatabaseManager:
                     )
                     conn.commit()
 
-                    # Clean up unused repositories
                     for repo_id in repo_ids:
                         self.cleanup_repository_if_unused(repo_id)
                     return True
             except sqlite3.Error as e:
-                logger.error(f"Error removing all repositories for user {user_id}: {e}")
+                logger.error(
+                    "Error removing all repositories for user %s: %s", user_id, e
+                )
                 return False
 
-    # ------------------------------------------------------------------
-    # Issue tracking
-    # ------------------------------------------------------------------
-
     def is_issue_tracked(self, issue_id: str) -> bool:
-        """Check if an issue event has already been notified."""
         try:
             with self._connect() as conn:
                 row = conn.execute(
@@ -365,13 +321,12 @@ class DatabaseManager:
                 ).fetchone()
                 return row is not None
         except sqlite3.Error as e:
-            logger.error(f"Error checking tracked issue {issue_id}: {e}")
+            logger.error("Error checking tracked issue %s: %s", issue_id, e)
             return False
 
     def add_tracked_issue(
         self, issue_id: str, repository_id: int, title: str, url: str
     ) -> bool:
-        """Record that an issue event has been notified."""
         with self._lock:
             try:
                 with self._connect() as conn:
@@ -382,11 +337,10 @@ class DatabaseManager:
                     conn.commit()
                     return True
             except sqlite3.Error as e:
-                logger.error(f"Error adding tracked issue {issue_id}: {e}")
+                logger.error("Error adding tracked issue %s: %s", issue_id, e)
                 return False
 
     def get_tracked_issue_ids_for_repo(self, repository_id: int) -> Set[str]:
-        """Return the set of already-notified issue IDs for a repository."""
         try:
             with self._connect() as conn:
                 rows = conn.execute(
@@ -396,15 +350,11 @@ class DatabaseManager:
                 return {row[0] for row in rows}
         except sqlite3.Error as e:
             logger.error(
-                f"Error fetching tracked issue ids for repo {repository_id}: {e}"
+                "Error fetching tracked issue ids for repo %s: %s", repository_id, e
             )
             return set()
 
     def get_all_tracked_repositories(self) -> List[Dict[str, Any]]:
-        """
-        Return every unique (owner, name, repo_id) plus the list of user_ids
-        subscribed to it, so the notification loop avoids redundant API calls.
-        """
         try:
             with self._connect() as conn:
                 rows = conn.execute(
@@ -422,7 +372,6 @@ class DatabaseManager:
                     """
                 ).fetchall()
 
-                # Group by repository ID in Python to avoid GROUP_CONCAT parsing bugs
                 repos = {}
                 for row in rows:
                     repo_id, owner, name, user_id, keywords, last_checked = row
@@ -439,11 +388,10 @@ class DatabaseManager:
                     )
                 return list(repos.values())
         except sqlite3.Error as e:
-            logger.error(f"Error getting all tracked repositories: {e}")
+            logger.error("Error getting all tracked repositories: %s", e)
             return []
 
     def update_repository_last_checked(self, repo_id: int) -> bool:
-        """Update the last_checked_at timestamp for a repository."""
         with self._lock:
             try:
                 with self._connect() as conn:
@@ -454,21 +402,21 @@ class DatabaseManager:
                     conn.commit()
                     return True
             except sqlite3.Error as e:
-                logger.error(f"Error updating last_checked_at for repo {repo_id}: {e}")
+                logger.error(
+                    "Error updating last_checked_at for repo %s: %s", repo_id, e
+                )
                 return False
 
     def get_all_user_ids(self) -> List[int]:
-        """Return all unique user IDs in the database."""
         try:
             with self._connect() as conn:
                 rows = conn.execute("SELECT user_id FROM users").fetchall()
                 return [row[0] for row in rows]
         except sqlite3.Error as e:
-            logger.error(f"Error getting all user IDs: {e}")
+            logger.error("Error getting all user IDs: %s", e)
             return []
 
     def get_system_stats(self) -> Dict[str, int]:
-        """Return high-level system statistics."""
         try:
             with self._connect() as conn:
                 user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
@@ -484,11 +432,10 @@ class DatabaseManager:
                     "tracked_issues": issue_count,
                 }
         except sqlite3.Error as e:
-            logger.error(f"Error getting system stats: {e}")
+            logger.error("Error getting system stats: %s", e)
             return {"users": 0, "repositories": 0, "tracked_issues": 0}
 
     def get_top_repositories(self, limit: int = 5) -> List[Dict[str, Any]]:
-        """Return the most tracked repositories."""
         try:
             with self._connect() as conn:
                 rows = conn.execute(
@@ -507,15 +454,10 @@ class DatabaseManager:
                     for row in rows
                 ]
         except sqlite3.Error as e:
-            logger.error(f"Error getting top repositories: {e}")
+            logger.error("Error getting top repositories: %s", e)
             return []
 
-    # ------------------------------------------------------------------
-    # Webhook tracking
-    # ------------------------------------------------------------------
-
     def add_webhook(self, repository_id: int, github_hook_id: int) -> bool:
-        """Record a GitHub webhook installation for a repository."""
         with self._lock:
             try:
                 with self._connect() as conn:
@@ -526,11 +468,10 @@ class DatabaseManager:
                     conn.commit()
                     return True
             except sqlite3.Error as e:
-                logger.error(f"Error adding webhook for repo {repository_id}: {e}")
+                logger.error("Error adding webhook for repo %s: %s", repository_id, e)
                 return False
 
     def get_webhook(self, repository_id: int) -> Optional[int]:
-        """Return the GitHub hook ID for a repository, or None."""
         try:
             with self._connect() as conn:
                 row = conn.execute(
@@ -539,11 +480,10 @@ class DatabaseManager:
                 ).fetchone()
                 return row[0] if row else None
         except sqlite3.Error as e:
-            logger.error(f"Error fetching webhook for repo {repository_id}: {e}")
+            logger.error("Error fetching webhook for repo %s: %s", repository_id, e)
             return None
 
     def remove_webhook(self, repository_id: int) -> bool:
-        """Remove the webhook record for a repository."""
         with self._lock:
             try:
                 with self._connect() as conn:
@@ -553,22 +493,13 @@ class DatabaseManager:
                     conn.commit()
                     return True
             except sqlite3.Error as e:
-                logger.error(f"Error removing webhook for repo {repository_id}: {e}")
+                logger.error("Error removing webhook for repo %s: %s", repository_id, e)
                 return False
 
-    # ------------------------------------------------------------------
-    # Cleanup
-    # ------------------------------------------------------------------
-
     def cleanup_repository_if_unused(self, repository_id: int) -> None:
-        """
-        Delete a single repository if it no longer has subscribers.
-        Also removes its associated tracked issues and webhook records.
-        """
         with self._lock:
             try:
                 with self._connect() as conn:
-                    # Check if there are any user subscriptions left for this repository
                     row = conn.execute(
                         "SELECT COUNT(*) FROM user_repositories WHERE repository_id = ?",
                         (repository_id,),
@@ -576,28 +507,23 @@ class DatabaseManager:
                     sub_count = row[0] if row else 0
 
                     if sub_count == 0:
-                        # Clean up webhook records for this repo
                         conn.execute(
                             "DELETE FROM webhooks WHERE repository_id = ?",
                             (repository_id,),
                         )
-                        # Clean up tracked issues for this repo
                         conn.execute(
                             "DELETE FROM tracked_issues WHERE repository_id = ?",
                             (repository_id,),
                         )
-                        # Clean up the repository itself
                         conn.execute(
-                            "DELETE FROM repositories WHERE id = ?",
-                            (repository_id,),
+                            "DELETE FROM repositories WHERE id = ?", (repository_id,)
                         )
                         conn.commit()
-                        logger.info(f"Cleaned up unused repository ID {repository_id}")
+                        logger.info("Cleaned up unused repository ID %s", repository_id)
             except sqlite3.Error as e:
                 logger.error(
-                    f"Error during repository cleanup for repo {repository_id}: {e}"
+                    "Error during repository cleanup for repo %s: %s", repository_id, e
                 )
 
 
-# Global database instance
 db = DatabaseManager()

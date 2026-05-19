@@ -1,7 +1,3 @@
-"""
-Stop command — lets a user delete their account and all tracking data.
-"""
-
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -15,8 +11,7 @@ _CONFIRM_YES = "stop|confirm"
 _CONFIRM_NO = "stop|cancel"
 
 
-async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ask for confirmation before deleting all user data."""
+async def stop_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = [
         [
             InlineKeyboardButton("✅ Yes, delete my data", callback_data=_CONFIRM_YES),
@@ -32,15 +27,14 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def handle_stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Process the stop confirmation button."""
+async def handle_stop_callback(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
 
     if query.data == _CONFIRM_YES:
         user_id = update.effective_user.id
         db.delete_user(user_id)
-        logger.info(f"User {user_id} deleted their account.")
+        logger.info("User %s deleted their account.", user_id)
         await query.edit_message_text(
             "✅ Your data has been deleted. Goodbye!\n\n"
             "You can always start fresh with /start."

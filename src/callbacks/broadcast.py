@@ -1,7 +1,3 @@
-"""
-Broadcast command callback handlers (admin only).
-"""
-
 import logging
 import warnings
 
@@ -28,8 +24,7 @@ _CB_CANCEL = "broadcast|cancel"
 _CB_AI_POLISH = "broadcast|ai_polish"
 
 
-async def broadcast_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Start the broadcast conversation."""
+async def broadcast_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id
 
     if user_id != config.ADMIN_USER_ID:
@@ -45,8 +40,9 @@ async def broadcast_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
     return GET_MESSAGE
 
 
-async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Store the message and ask for confirmation."""
+async def handle_broadcast_message(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> int:
     context.user_data["broadcast_message"] = update.message.text
 
     keyboard = [
@@ -61,10 +57,9 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
     )
 
     try:
-        # Send the actual message as it will appear to users
         await update.message.reply_text(
             update.message.text,
-            parse_mode="Markdown",  # Default to Markdown (V1)
+            parse_mode="Markdown",
         )
     except Exception as e:
         await update.message.reply_text(
@@ -81,21 +76,24 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
             InlineKeyboardButton("❌ Cancel", callback_data=_CB_CANCEL),
         ]
     ]
-    
+
     if config.GEMINI_API_KEY:
-        keyboard.insert(0, [InlineKeyboardButton("✨ Polish with AI", callback_data=_CB_AI_POLISH)])
+        keyboard.insert(
+            0, [InlineKeyboardButton("✨ Polish with AI", callback_data=_CB_AI_POLISH)]
+        )
 
     await update.message.reply_text(
         "⚠️ *Are you sure you want to send this to ALL users?*",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown",
     )
-    return CONFIRM
+
     return CONFIRM
 
 
-async def handle_broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Execute the broadcast or cancel."""
+async def handle_broadcast_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> int:
     query = update.callback_query
     await query.answer()
 
@@ -110,29 +108,26 @@ async def handle_broadcast_callback(update: Update, context: ContextTypes.DEFAUL
         return ConversationHandler.END
 
     if query.data == _CB_AI_POLISH:
-        await query.edit_message_text("✨ *Polishing your message with AI...*", parse_mode="Markdown")
-        
+        await query.edit_message_text(
+            "✨ *Polishing your message with AI...*", parse_mode="Markdown"
+        )
         try:
             polished = await ai_client.polish_broadcast(message)
             if polished:
                 context.user_data["broadcast_message"] = polished
-                
                 keyboard = [
                     [
-                        InlineKeyboardButton("✅ Confirm & Send", callback_data=_CB_CONFIRM),
+                        InlineKeyboardButton(
+                            "✅ Confirm & Send", callback_data=_CB_CONFIRM
+                        ),
                         InlineKeyboardButton("❌ Cancel", callback_data=_CB_CANCEL),
                     ]
                 ]
-                
+
                 await query.message.reply_text(
                     "✨ *AI Polished Preview:*", parse_mode="Markdown"
                 )
-                
-                await query.message.reply_text(
-                    polished,
-                    parse_mode="Markdown",
-                )
-                
+                await query.message.reply_text(polished, parse_mode="Markdown")
                 await query.message.reply_text(
                     "⚠️ *Are you sure you want to send this to ALL users?*",
                     reply_markup=InlineKeyboardMarkup(keyboard),
@@ -140,11 +135,17 @@ async def handle_broadcast_callback(update: Update, context: ContextTypes.DEFAUL
                 )
                 return CONFIRM
             else:
-                await query.message.reply_text("❌ AI polishing failed. Please confirm your original message or cancel.", parse_mode="Markdown")
+                await query.message.reply_text(
+                    "❌ AI polishing failed. Please confirm your original message or cancel.",
+                    parse_mode="Markdown",
+                )
                 return CONFIRM
         except Exception as e:
-            logger.error(f"Error polishing broadcast: {e}")
-            await query.message.reply_text("❌ AI polishing encountered an error. Please confirm your original message or cancel.", parse_mode="Markdown")
+            logger.error("Error polishing broadcast: %s", e)
+            await query.message.reply_text(
+                "❌ AI polishing encountered an error. Please confirm your original message or cancel.",
+                parse_mode="Markdown",
+            )
             return CONFIRM
 
     await query.edit_message_text("🚀 *Broadcasting message...*", parse_mode="Markdown")
@@ -163,7 +164,7 @@ async def handle_broadcast_callback(update: Update, context: ContextTypes.DEFAUL
             )
             success += 1
         except Exception as e:
-            logger.error(f"Failed to send broadcast to {uid}: {e}")
+            logger.error("Failed to send broadcast to %s: %s", uid, e)
             failed += 1
 
     await query.edit_message_text(
@@ -179,8 +180,7 @@ async def handle_broadcast_callback(update: Update, context: ContextTypes.DEFAUL
     return ConversationHandler.END
 
 
-async def cancel_broadcast(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Cancel the broadcast conversation."""
+async def cancel_broadcast(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("❌ Broadcast aborted.")
     return ConversationHandler.END
 
@@ -188,6 +188,7 @@ async def cancel_broadcast(update: Update, _: ContextTypes.DEFAULT_TYPE):
 warnings.filterwarnings(
     action="ignore", message=r".*CallbackQueryHandler.*", category=PTBUserWarning
 )
+
 broadcast_conv_handler = ConversationHandler(
     entry_points=[CommandHandler("broadcast", broadcast_command)],
     states={

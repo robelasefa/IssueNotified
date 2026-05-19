@@ -1,7 +1,3 @@
-"""
-Track command callback handlers.
-"""
-
 import logging
 
 from telegram import Update
@@ -23,11 +19,9 @@ logger = logging.getLogger(__name__)
 TRACK_REPO = 1
 
 
-async def track_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Start repository tracking conversation."""
+async def track_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id
 
-    # Enforce repo limit instantly before starting the conversation
     if db.count_user_repositories(user_id) >= config.MAX_REPOS_PER_USER:
         await update.message.reply_text(
             f"⚠️ You are already tracking the maximum limit of {config.MAX_REPOS_PER_USER} repositories.\n\n"
@@ -47,15 +41,10 @@ async def track_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
 
 
 async def _try_create_webhook(owner: str, name: str, repo_id: int) -> None:
-    """Attempt to install a GitHub webhook on the repository.
-
-    Fails silently if the bot lacks permissions (e.g. user doesn't own the repo).
-    """
     github_client = get_github_client()
     if not github_client or not config.WEBHOOK_BASE_URL:
         return
 
-    # Skip if a webhook is already installed
     if db.get_webhook(repo_id):
         return
 
@@ -66,19 +55,18 @@ async def _try_create_webhook(owner: str, name: str, repo_id: int) -> None:
 
     if hook_id:
         db.add_webhook(repo_id, hook_id)
-        logger.info(f"Webhook installed for {owner}/{name} (hook_id={hook_id})")
+        logger.info("Webhook installed for %s/%s (hook_id=%s)", owner, name, hook_id)
     else:
         logger.info(
-            f"Could not create webhook for {owner}/{name} — "
-            "user may need to add it manually."
+            "Could not create webhook for %s/%s — manual intervention required",
+            owner,
+            name,
         )
 
 
-async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Validate, look up, and store the repository the user wants to track."""
+async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id
 
-    # --- Enforce cap before doing any API calls ---
     if db.count_user_repositories(user_id) >= config.MAX_REPOS_PER_USER:
         await update.message.reply_text(
             f"⚠️ You're already tracking {config.MAX_REPOS_PER_USER} repositories, "
@@ -104,7 +92,6 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE):
         )
         return ConversationHandler.END
 
-    # Confirm the repo exists on GitHub and fetch canonical casing
     repo_data = await github_client.get_repository_info(owner, repo)
     if not repo_data:
         await update.message.reply_text(
@@ -118,7 +105,6 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE):
         )
         return TRACK_REPO
 
-    # Use canonical owner/name casing returned by the API
     canonical_owner = repo_data.get("owner", {}).get("login", owner)
     canonical_name = repo_data.get("name", repo)
 
@@ -129,7 +115,6 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE):
         )
         return ConversationHandler.END
 
-    # Ensure repository exists in our database and get its ID
     repo_id = db.add_repository(canonical_owner, canonical_name)
     if not repo_id:
         await update.message.reply_text("❌ Error: Could not register repository.")
@@ -138,7 +123,11 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE):
     success = db.link_user_repository(user_id, repo_id, keywords)
     if success:
         logger.info(
-            f"User {user_id} started tracking {canonical_owner}/{canonical_name} (keywords: {keywords})"
+            "User %s started tracking %s/%s (keywords: %s)",
+            user_id,
+            canonical_owner,
+            canonical_name,
+            keywords,
         )
         msg = f"✅ Now tracking `{canonical_owner}/{canonical_name}`!"
         if keywords:
@@ -146,8 +135,6 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE):
         msg += "\n\nYou'll be notified when new issues are opened or closed."
 
         await update.message.reply_text(msg, parse_mode="Markdown")
-
-        # Try to install a GitHub webhook (best-effort)
         await _try_create_webhook(canonical_owner, canonical_name, repo_id)
     else:
         await update.message.reply_text(
@@ -157,8 +144,7 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-async def cancel_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Cancel the tracking conversation."""
+async def cancel_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("❌ Operation cancelled.")
     return ConversationHandler.END
 

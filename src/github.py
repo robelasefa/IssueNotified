@@ -1,7 +1,3 @@
-"""
-GitHub API client with rate limiting and webhook management.
-"""
-
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -14,10 +10,9 @@ logger = logging.getLogger(__name__)
 
 
 class GitHubClient:
-    """Async GitHub API client with rate limiting."""
+    """Async GitHub REST API client with per-key rate limiting."""
 
     def __init__(self, token: str):
-        self.token = token
         self.base_url = "https://api.github.com"
         self.headers = {
             "Authorization": f"token {token}",
@@ -33,11 +28,9 @@ class GitHubClient:
         *,
         full_url: str = None,
     ) -> Optional[Any]:
-        """
-        Make a rate-limited GET request to the GitHub API.
+        """Rate-limited GET to the GitHub API.
 
-        Pass ``full_url`` to bypass the base-URL prefix (used by the search
-        endpoint which lives at /search/repositories rather than /repos/…).
+        Pass ``full_url`` to bypass the ``/repos/…`` prefix (e.g. the search endpoint).
         """
         await self.rate_limiter.wait_if_needed("github")
 
@@ -48,62 +41,35 @@ class GitHubClient:
                 async with session.get(url, params=params) as response:
                     if response.status == 200:
                         return await response.json()
-                    elif response.status == 404:
-                        logger.warning(f"GitHub API 404: {url}")
-                        return None
+                    if response.status == 404:
+                        logger.warning("GitHub 404: %s", url)
                     elif response.status == 403:
-                        logger.error(f"GitHub API rate limit / forbidden: {url}")
-                        return None
+                        logger.error("GitHub 403 (rate limit or forbidden): %s", url)
                     elif response.status == 422:
-                        logger.warning(f"GitHub API unprocessable entity: {url}")
-                        return None
+                        logger.warning("GitHub 422 (unprocessable): %s", url)
                     else:
-                        logger.error(f"GitHub API error {response.status}: {url}")
-                        return None
+                        logger.error("GitHub %s: %s", response.status, url)
+                    return None
         except aiohttp.ClientError as e:
-            logger.error(f"Network error for {url}: {e}")
+            logger.error("Network error for %s: %s", url, e)
             return None
-        except Exception as e:
-            logger.error(f"Unexpected error for {url}: {e}")
-            return None
-
-    # ------------------------------------------------------------------
-    # Repository helpers
-    # ------------------------------------------------------------------
 
     async def validate_repository(self, owner: str, repo: str) -> bool:
-        """Check whether a repository exists and is accessible."""
-        data = await self._make_request(f"repos/{owner}/{repo}")
-        return data is not None
+        return await self._make_request(f"repos/{owner}/{repo}") is not None
 
     async def get_repository_info(self, owner: str, repo: str) -> Optional[Dict]:
-        """Return raw repository metadata from the GitHub API."""
         return await self._make_request(f"repos/{owner}/{repo}")
 
-    # ------------------------------------------------------------------
-    # Search
-    # ------------------------------------------------------------------
-
     async def search_repositories(
-        self,
-        query: str,
-        per_page: int = 10,
+        self, query: str, per_page: int = 10
     ) -> List[Dict[str, Any]]:
-        """
-        Search GitHub repositories using the Search API.
+        """Search GitHub repos.
 
-        ``query`` may be a bare repo name (searched across all of GitHub) or
-        an ``owner/repo`` string (qualified with the ``user:`` qualifier so
-        results are scoped to that owner).
-
-        Returns a list of dicts with keys:
-            owner, name, description, stars, language, url
+        Accepts a bare name or ``owner/repo``,  the latter is rewritten to
+        ``name user:owner`` so results are scoped to that owner.
         """
-        # Build a qualified search string when the caller passes owner/repo
         if "/" in query:
-            parts = query.split("/", 1)
-            owner_q, name_q = parts[0].strip(), parts[1].strip()
-            # GitHub search qualifier: user:owner + repo name fragment
+            owner_q, name_q = [p.strip() for p in query.split("/", 1)]
             q = f"{name_q} user:{owner_q}"
         else:
             q = query.strip()
@@ -137,24 +103,19 @@ class GitHubClient:
             )
         return results
 
-    # ------------------------------------------------------------------
-    # Issue events (kept for compatibility / fallback)
-    # ------------------------------------------------------------------
-
     async def get_repository_issues_events(self, owner: str, repo: str) -> List[Dict]:
-        """Fetch the latest issue events for a repository."""
         data = await self._make_request(f"repos/{owner}/{repo}/issues/events")
         if data is None:
             return []
         return data if isinstance(data, list) else []
 
     def format_issue_info(self, issue_event: Dict) -> Dict[str, Any]:
-        """Normalise an issue-event payload into a flat dict for notifications."""
+        """Normalise a polling issue-event payload into the shared notification shape."""
         if not issue_event or "issue" not in issue_event:
             return {}
 
         event_type = issue_event.get("event")
-        if event_type not in ["opened", "closed"]:
+        if event_type not in ("opened", "closed"):
             return {}
 
         issue = issue_event["issue"]
@@ -197,17 +158,12 @@ class GitHubClient:
 
         return new_issues
 
-    # ------------------------------------------------------------------
-    # Webhook management
-    # ------------------------------------------------------------------
-
     async def create_webhook(
         self, owner: str, repo: str, webhook_url: str, secret: str
     ) -> Optional[int]:
-        """Create an issues webhook on a GitHub repository.
+        """Register an ``issues`` webhook on a GitHub repository.
 
-        Returns the GitHub hook ID on success, or ``None`` if the request
-        failed (e.g. insufficient permissions).
+        Returns the GitHub hook ID, or ``None`` on failure (e.g. insufficient permissions).
         """
         await self.rate_limiter.wait_if_needed("github")
 
@@ -229,21 +185,22 @@ class GitHubClient:
                 async with session.post(url, json=payload) as response:
                     if response.status == 201:
                         data = await response.json()
-                        logger.info(f"Webhook created for {owner}/{repo}")
+                        logger.info("Webhook created for %s/%s", owner, repo)
                         return data.get("id")
-                    else:
-                        body = await response.text()
-                        logger.warning(
-                            f"Failed to create webhook for {owner}/{repo}: "
-                            f"{response.status} — {body}"
-                        )
-                        return None
-        except Exception as e:
-            logger.error(f"Error creating webhook for {owner}/{repo}: {e}")
+                    body = await response.text()
+                    logger.warning(
+                        "Failed to create webhook for %s/%s: %s — %s",
+                        owner,
+                        repo,
+                        response.status,
+                        body,
+                    )
+                    return None
+        except aiohttp.ClientError as e:
+            logger.error("Network error creating webhook for %s/%s: %s", owner, repo, e)
             return None
 
     async def delete_webhook(self, owner: str, repo: str, hook_id: int) -> bool:
-        """Delete a webhook from a GitHub repository."""
         await self.rate_limiter.wait_if_needed("github")
 
         try:
@@ -251,31 +208,25 @@ class GitHubClient:
                 url = f"{self.base_url}/repos/{owner}/{repo}/hooks/{hook_id}"
                 async with session.delete(url) as response:
                     if response.status == 204:
-                        logger.info(f"Webhook {hook_id} deleted for {owner}/{repo}")
-                        return True
-                    else:
-                        logger.warning(
-                            f"Failed to delete webhook {hook_id} for {owner}/{repo}: "
-                            f"{response.status}"
+                        logger.info(
+                            "Webhook %s deleted for %s/%s", hook_id, owner, repo
                         )
-                        return False
-        except Exception as e:
-            logger.error(f"Error deleting webhook for {owner}/{repo}: {e}")
+                        return True
+                    logger.warning(
+                        "Failed to delete webhook %s for %s/%s: %s",
+                        hook_id,
+                        owner,
+                        repo,
+                        response.status,
+                    )
+                    return False
+        except aiohttp.ClientError as e:
+            logger.error("Network error deleting webhook for %s/%s: %s", owner, repo, e)
             return False
 
 
-# ---------------------------------------------------------------------------
-# Webhook payload formatter
-# ---------------------------------------------------------------------------
-
-
 def format_webhook_issue(payload: Dict) -> Dict[str, Any]:
-    """Convert a GitHub webhook ``issues`` event into the normalised format
-    used by the notification engine.
-
-    The output dict has the same shape as ``GitHubClient.format_issue_info``
-    so that ``_format_notification`` works without changes.
-    """
+    """Convert a GitHub webhook ``issues`` payload into the shared notification shape."""
     action = payload.get("action", "opened")
     issue = payload.get("issue", {})
 
@@ -304,53 +255,41 @@ def format_webhook_issue(payload: Dict) -> Dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
-
-
 def _format_time_message(created_at: str) -> str:
-    """Return a human-readable time string from an ISO-8601 timestamp."""
     try:
         release_time = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ").replace(
             tzinfo=timezone.utc
         )
         now = datetime.now(timezone.utc)
-        time_diff = now - release_time
-        total_seconds = int(time_diff.total_seconds())
+        diff = now - release_time
+        total_secs = int(diff.total_seconds())
 
-        if time_diff.days >= 1:
-            time_str = f"{time_diff.days} day{'s' if time_diff.days > 1 else ''} ago"
-        elif total_seconds >= 3600:
-            hours = total_seconds // 3600
-            time_str = f"{hours} hour{'s' if hours > 1 else ''} ago"
-        elif total_seconds >= 60:
-            minutes = total_seconds // 60
-            time_str = f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+        if diff.days >= 1:
+            relative = f"{diff.days} day{'s' if diff.days > 1 else ''} ago"
+        elif total_secs >= 3600:
+            h = total_secs // 3600
+            relative = f"{h} hour{'s' if h > 1 else ''} ago"
+        elif total_secs >= 60:
+            m = total_secs // 60
+            relative = f"{m} minute{'s' if m > 1 else ''} ago"
         else:
-            time_str = "just now"
+            relative = "just now"
 
         release_time_utc = release_time.astimezone(timezone.utc)
-        release_time_str = release_time_utc.strftime("%Y-%m-%d %I:%M %p %Z")
-        return f"🕐 {release_time_str} ({time_str})\n"
+        formatted = release_time_utc.strftime("%Y-%m-%d %I:%M %p %Z")
+        return f"🕐 {formatted} ({relative})\n"
     except ValueError:
         return "🕐 Time released: Unknown\n"
 
-
-# ---------------------------------------------------------------------------
-# Module-level singleton
-# ---------------------------------------------------------------------------
 
 github_client: Optional[GitHubClient] = None
 
 
 def get_github_client() -> Optional[GitHubClient]:
-    """Return the global GitHub client, or None if not yet initialised."""
     return github_client
 
 
 def initialize_github_client(token: str) -> GitHubClient:
-    """Create and store the global GitHub client."""
     global github_client
     github_client = GitHubClient(token)
     return github_client

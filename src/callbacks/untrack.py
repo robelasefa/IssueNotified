@@ -1,8 +1,5 @@
-"""
-Untrack command callback handlers.
-"""
-
 import logging
+from typing import Tuple
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -21,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 SELECT_REPO = 1
 
-# Use a pipe separator so owner/repo names with underscores parse correctly.
 _CB_PREFIX = "untrack|"
 
 
@@ -29,23 +25,19 @@ def _make_untrack_callback(owner: str, name: str) -> str:
     return f"{_CB_PREFIX}{owner}|{name}"
 
 
-def _parse_untrack_callback(data: str):
+def _parse_untrack_callback(data: str) -> Tuple[str, str]:
     _, owner, name = data.split("|", 2)
     return owner, name
 
 
 async def _try_delete_webhook(owner: str, name: str) -> None:
-    """Delete the GitHub webhook for a repository if it exists and the repo
-    has no remaining subscribers.
-    """
     repo_id = db.get_repository_id(owner, name)
     if repo_id is None:
         return
 
-    # Only delete if no subscribers remain
+    # Webhook is deleted only if no subscribers remain for the repository.
     repo_data = db.get_repository_with_subscribers(owner, name)
     if repo_data is not None:
-        # Still has subscribers
         return
 
     hook_id = db.get_webhook(repo_id)
@@ -57,11 +49,10 @@ async def _try_delete_webhook(owner: str, name: str) -> None:
         await github_client.delete_webhook(owner, name, hook_id)
 
     db.remove_webhook(repo_id)
-    logger.info(f"Webhook removed for {owner}/{name}")
+    logger.info("Webhook removed for %s/%s", owner, name)
 
 
-async def untrack_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Show inline buttons for every tracked repository."""
+async def untrack_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id
     repositories = db.get_user_repositories(user_id)
 
@@ -92,8 +83,7 @@ async def untrack_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
     return SELECT_REPO
 
 
-async def handle_untrack_callback(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Process the untrack button press."""
+async def handle_untrack_callback(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
 
@@ -109,12 +99,11 @@ async def handle_untrack_callback(update: Update, _: ContextTypes.DEFAULT_TYPE):
 
     success = db.remove_user_repository(user_id, owner, name)
     if success:
-        logger.info(f"User {user_id} stopped tracking {owner}/{name}")
+        logger.info("User %s stopped tracking %s/%s", user_id, owner, name)
         await query.edit_message_text(
             f"✅ Stopped tracking `{owner}/{name}`.",
             parse_mode="Markdown",
         )
-        # Clean up the GitHub webhook if no subscribers remain
         await _try_delete_webhook(owner, name)
     else:
         await query.edit_message_text(
@@ -124,8 +113,7 @@ async def handle_untrack_callback(update: Update, _: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-async def cancel_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Cancel the untrack conversation."""
+async def cancel_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("❌ Untrack cancelled.")
     return ConversationHandler.END
 
@@ -134,16 +122,12 @@ untrack_conv_handler = ConversationHandler(
     entry_points=[CommandHandler("untrack", untrack_command)],
     states={
         SELECT_REPO: [
-            # The user taps a button — handled by the global callback handler below.
-            # This state only needs a text fallback for accidental messages.
             MessageHandler(filters.TEXT & ~filters.COMMAND, lambda u, c: SELECT_REPO)
         ]
     },
     fallbacks=[CommandHandler("cancel", cancel_command)],
 )
 
-# Standalone callback handler registered in main.py so button presses work
-# regardless of conversation state (e.g. after a bot restart).
 untrack_callback_handler = CallbackQueryHandler(
     handle_untrack_callback, pattern=r"^untrack\|"
 )

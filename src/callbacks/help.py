@@ -1,19 +1,10 @@
-"""
-Help command callback handler.
-"""
-
-import logging
-
 from telegram import Update
 from telegram.ext import ContextTypes
 
 import config
 
-logger = logging.getLogger(__name__)
 
-
-async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
-    """Handle /help command."""
+async def help_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     help_text = f"""
 🤖 *IssueNotified Bot Help*
 
@@ -38,7 +29,7 @@ Example: `torvalds/linux`
 • Max {config.MAX_REPOS_PER_USER} tracked repositories per user
 
 *Features:*
-🔔 Real-time issue notifications
-🔍 GitHub repository search with one-tap tracking
+• Real-time issue notifications
+• GitHub repository search with one-tap tracking
 """
     await update.message.reply_text(help_text.strip(), parse_mode="Markdown")

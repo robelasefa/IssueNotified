@@ -1,7 +1,3 @@
-"""
-Centralised error handler for the bot.
-"""
-
 import logging
 
 from telegram import Update
@@ -10,8 +6,7 @@ from telegram.ext import ContextTypes
 logger = logging.getLogger(__name__)
 
 
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Log the exception and optionally notify the user."""
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(
         "Unhandled exception while processing an update.",
         exc_info=context.error,
@@ -23,4 +18,4 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "⚠️ Something went wrong. Please try again in a moment."
             )
         except Exception:
-            pass  # Never raise inside an error handler
+            pass
