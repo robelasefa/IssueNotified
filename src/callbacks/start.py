@@ -1,6 +1,7 @@
 import logging
 
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from database import db
@@ -30,4 +31,4 @@ Just type /track and let us take care of the rest.
     except Exception as e:
         logger.error("Error registering user %s: %s", user_id, e)
 
-    await update.message.reply_text(welcome_msg, parse_mode="Markdown")
+    await update.message.reply_text(welcome_msg, parse_mode=ParseMode.MARKDOWN_V2)

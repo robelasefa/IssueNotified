@@ -1,6 +1,7 @@
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ParseMode
 from telegram.ext import CallbackQueryHandler, ContextTypes
 
 from database import db
@@ -23,7 +24,7 @@ async def stop_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         "This will remove your account and untrack all repositories. "
         "This action cannot be undone.",
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown",
+        parse_mode=ParseMode.MARKDOWN_V2,
     )
 
 

@@ -2,6 +2,7 @@ import logging
 import warnings
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ParseMode
 from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
@@ -35,7 +36,7 @@ async def broadcast_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int
         "Please send the message you want to broadcast to all users.\n"
         "You can use Markdown formatting.\n\n"
         "Type /cancel to abort.",
-        parse_mode="Markdown",
+        parse_mode=ParseMode.MARKDOWN,
     )
     return GET_MESSAGE
 
@@ -53,20 +54,20 @@ async def handle_broadcast_message(
     ]
 
     await update.message.reply_text(
-        "📝 *Preview of your message:*", parse_mode="Markdown"
+        "📝 *Preview of your message:*", parse_mode=ParseMode.MARKDOWN
     )
 
     try:
         await update.message.reply_text(
             update.message.text,
-            parse_mode="Markdown",
+            parse_mode=ParseMode.MARKDOWN,
         )
     except Exception as e:
         await update.message.reply_text(
             f"❌ *Formatting Error*\n\n"
-            f"Your message contains invalid Markdown: `{e}`\n\n"
+            f"Your message contains invalid Markdown: `{str(e)}`\n\n"
             "Please fix it and send the message again, or type /cancel.",
-            parse_mode="Markdown",
+            parse_mode=ParseMode.MARKDOWN,
         )
         return GET_MESSAGE
 
@@ -85,7 +86,7 @@ async def handle_broadcast_message(
     await update.message.reply_text(
         "⚠️ *Are you sure you want to send this to ALL users?*",
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown",
+        parse_mode=ParseMode.MARKDOWN,
     )
 
     return CONFIRM
@@ -109,10 +110,10 @@ async def handle_broadcast_callback(
 
     if query.data == _CB_AI_POLISH:
         await query.edit_message_text(
-            "✨ *Polishing your message with AI...*", parse_mode="Markdown"
+            "✨ *Polishing your message with AI...*", parse_mode=ParseMode.MARKDOWN
         )
         try:
-            polished = await ai_client.polish_broadcast(message)
+            polished = await ai_client.polish_broadcast(message, context.bot.username)
             if polished:
                 context.user_data["broadcast_message"] = polished
                 keyboard = [
@@ -124,31 +125,37 @@ async def handle_broadcast_callback(
                     ]
                 ]
 
-                await query.message.reply_text(
-                    "✨ *AI Polished Preview:*", parse_mode="Markdown"
+                await query.edit_message_text(
+                    "✨ *AI Polished Preview:*", parse_mode=ParseMode.MARKDOWN
                 )
-                await query.message.reply_text(polished, parse_mode="Markdown")
+                try:
+                    await query.message.reply_text(polished, parse_mode=ParseMode.HTML)
+                except Exception:
+                    # Fallback to plain text if HTML parsing fails
+                    await query.message.reply_text(polished)
                 await query.message.reply_text(
                     "⚠️ *Are you sure you want to send this to ALL users?*",
                     reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode="Markdown",
+                    parse_mode=ParseMode.MARKDOWN,
                 )
                 return CONFIRM
             else:
                 await query.message.reply_text(
-                    "❌ AI polishing failed. Please confirm your original message or cancel.",
-                    parse_mode="Markdown",
+                    "❌ AI polishing failed. Please confirm your original message or cancel."
                 )
                 return CONFIRM
         except Exception as e:
             logger.error("Error polishing broadcast: %s", e)
             await query.message.reply_text(
                 "❌ AI polishing encountered an error. Please confirm your original message or cancel.",
-                parse_mode="Markdown",
+                parse_mode=ParseMode.MARKDOWN,
             )
+            print(f"Error polishing broadcast: \n\n{e}\n\n")
             return CONFIRM
 
-    await query.edit_message_text("🚀 *Broadcasting message...*", parse_mode="Markdown")
+    await query.edit_message_text(
+        "🚀 *Broadcasting message...*", parse_mode=ParseMode.MARKDOWN
+    )
 
     user_ids = db.get_all_user_ids()
     total = len(user_ids)
@@ -160,7 +167,7 @@ async def handle_broadcast_callback(
             await context.bot.send_message(
                 chat_id=uid,
                 text=message,
-                parse_mode="Markdown",
+                parse_mode=ParseMode.HTML,
             )
             success += 1
         except Exception as e:
@@ -173,7 +180,7 @@ async def handle_broadcast_callback(
         f"• Total users: {total}\n"
         f"• Successfully sent: {success}\n"
         f"• Failed: {failed}",
-        parse_mode="Markdown",
+        parse_mode=ParseMode.MARKDOWN,
     )
 
     context.user_data.pop("broadcast_message", None)

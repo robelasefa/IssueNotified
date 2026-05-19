@@ -1,6 +1,7 @@
 import logging
 
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import (
     CommandHandler,
     ContextTypes,
@@ -26,7 +27,7 @@ async def track_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text(
             f"⚠️ You are already tracking the maximum limit of {config.MAX_REPOS_PER_USER} repositories.\n\n"
             "Please use /untrack to stop tracking some repositories first!",
-            parse_mode="Markdown",
+            parse_mode=ParseMode.MARKDOWN_V2,
         )
         return ConversationHandler.END
 
@@ -35,7 +36,7 @@ async def track_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
         "Send the repository in `owner/repo` format:\n"
         "Example: `facebook/react`\n\n"
         "Or type /cancel to abort.",
-        parse_mode="Markdown",
+        parse_mode=ParseMode.MARKDOWN_V2,
     )
     return TRACK_REPO
 
@@ -101,7 +102,7 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE) -> in
             "2. The name is misspelled.\n"
             "3. The repository does not exist.\n\n"
             "Please check the name and try again, or type /cancel.",
-            parse_mode="Markdown",
+            parse_mode=ParseMode.MARKDOWN_V2,
         )
         return TRACK_REPO
 
@@ -111,7 +112,7 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE) -> in
     if db.is_user_tracking_repository(user_id, canonical_owner, canonical_name):
         await update.message.reply_text(
             f"⚠️ You're already tracking `{canonical_owner}/{canonical_name}`!",
-            parse_mode="Markdown",
+            parse_mode=ParseMode.MARKDOWN_V2,
         )
         return ConversationHandler.END
 
@@ -134,7 +135,7 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE) -> in
             msg += f"\n\n🔍 *Filter:* `{keywords}`"
         msg += "\n\nYou'll be notified when new issues are opened or closed."
 
-        await update.message.reply_text(msg, parse_mode="Markdown")
+        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN_V2)
         await _try_create_webhook(canonical_owner, canonical_name, repo_id)
     else:
         await update.message.reply_text(

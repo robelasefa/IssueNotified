@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.constants import ParseMode
 
 from ai import ai_client
 from database import db
@@ -155,7 +156,7 @@ async def process_github_webhook_event(payload: dict, bot: Bot) -> None:
             await bot.send_message(
                 chat_id=uid,
                 text=message,
-                parse_mode="Markdown",
+                parse_mode=ParseMode.MARKDOWN,
                 reply_markup=reply_markup,
                 disable_web_page_preview=True,
             )

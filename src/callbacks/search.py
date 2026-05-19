@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict, List, Tuple
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ParseMode
 from telegram.ext import CallbackQueryHandler, ContextTypes
 
 import config
@@ -95,7 +96,7 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "Examples:\n"
             "• `/search react` — search by repository name\n"
             "• `/search facebook/react` — search within an owner's repos\n",
-            parse_mode="Markdown",
+            parse_mode=ParseMode.MARKDOWN_V2,
         )
         return
 
@@ -128,7 +129,7 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(
             f"😕 No repositories found for `{search_term}`\\.\n\n"
             "Try a different name or check the spelling\\.",
-            parse_mode="MarkdownV2",
+            parse_mode=ParseMode.MARKDOWN_V2,
         )
         return
 
@@ -137,7 +138,10 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     text, markup = _build_results_message(search_term, results, current_repos)
     await update.message.reply_text(
-        text, reply_markup=markup, parse_mode="Markdown", disable_web_page_preview=True
+        text,
+        reply_markup=markup,
+        parse_mode=ParseMode.MARKDOWN_V2,
+        disable_web_page_preview=True,
     )
 
 
@@ -161,7 +165,7 @@ async def handle_search_callback(
         await query.edit_message_text(
             f"⚠️ You have reached your limit of {config.MAX_REPOS_PER_USER} tracked repositories.\n\n"
             "Please untrack a repository first using /untrack before tracking new ones!",
-            parse_mode="Markdown",
+            parse_mode=ParseMode.MARKDOWN_V2,
         )
         return
 
@@ -176,7 +180,7 @@ async def handle_search_callback(
         await query.edit_message_text(
             f"✅ Now tracking `{owner}/{repo}`\\!\n\n"
             f"Use /list to see all your tracked repositories\\.",
-            parse_mode="MarkdownV2",
+            parse_mode=ParseMode.MARKDOWN_V2,
         )
     else:
         await query.edit_message_text("❌ Failed to add repository. Please try again.")

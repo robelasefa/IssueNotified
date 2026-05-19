@@ -1,4 +1,5 @@
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from database import db
@@ -33,5 +34,5 @@ async def list_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             lines.append(line)
         await update.message.reply_text(
             header + "\n".join(lines),
-            parse_mode="Markdown",
+            parse_mode=ParseMode.MARKDOWN_V2,
         )

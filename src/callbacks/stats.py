@@ -1,6 +1,7 @@
 import logging
 
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 import config
@@ -35,4 +36,6 @@ async def stats_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         stats_text += "🏆 *No repositories tracked yet.*"
 
-    await update.message.reply_text(stats_text.strip(), parse_mode="Markdown")
+    await update.message.reply_text(
+        stats_text.strip(), parse_mode=ParseMode.MARKDOWN_V2
+    )

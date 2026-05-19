@@ -5,16 +5,16 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-BOT_TOKEN     = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 DEV_BOT_TOKEN = os.getenv("DEV_BOT_TOKEN")
-DEBUG         = os.getenv("DEBUG", "false").lower() == "true"
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 try:
     ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID") or "0")
 except ValueError:
     ADMIN_USER_ID = 0
 
-GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Azure App Service only persists /home across restarts; fall back to local data/ otherwise.
@@ -29,6 +29,6 @@ if not WEBHOOK_SECRET:
     WEBHOOK_SECRET = "dev_default_secret_please_change"
 
 GITHUB_WEBHOOK_PATH = "/github/webhook"
-PORT                = int(os.getenv("PORT", "8443"))
-MAX_RETRIES         = int(os.getenv("MAX_RETRIES", "10"))
-MAX_REPOS_PER_USER  = int(os.getenv("MAX_REPOS_PER_USER", "10"))
+PORT = int(os.getenv("PORT", "8443"))
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", "10"))
+MAX_REPOS_PER_USER = int(os.getenv("MAX_REPOS_PER_USER", "10"))
