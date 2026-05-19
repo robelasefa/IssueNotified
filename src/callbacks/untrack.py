@@ -79,7 +79,7 @@ async def untrack_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text(
         "🗑️ *Select a repository to stop tracking:*",
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.MARKDOWN,
     )
     return SELECT_REPO
 
@@ -103,7 +103,7 @@ async def handle_untrack_callback(update: Update, _: ContextTypes.DEFAULT_TYPE) 
         logger.info("User %s stopped tracking %s/%s", user_id, owner, name)
         await query.edit_message_text(
             f"✅ Stopped tracking `{owner}/{name}`.",
-            parse_mode=ParseMode.MARKDOWN_V2,
+            parse_mode=ParseMode.MARKDOWN,
         )
         await _try_delete_webhook(owner, name)
     else:

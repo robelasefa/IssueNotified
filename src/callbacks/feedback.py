@@ -25,6 +25,6 @@ async def feedback_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None
     await update.message.reply_text(
         feedback_text,
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.MARKDOWN,
         disable_web_page_preview=True,
     )

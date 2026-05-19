@@ -96,7 +96,7 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "Examples:\n"
             "• `/search react` — search by repository name\n"
             "• `/search facebook/react` — search within an owner's repos\n",
-            parse_mode=ParseMode.MARKDOWN_V2,
+            parse_mode=ParseMode.MARKDOWN,
         )
         return
 
@@ -129,7 +129,7 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(
             f"😕 No repositories found for `{search_term}`\\.\n\n"
             "Try a different name or check the spelling\\.",
-            parse_mode=ParseMode.MARKDOWN_V2,
+            parse_mode=ParseMode.MARKDOWN,
         )
         return
 
@@ -140,7 +140,7 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(
         text,
         reply_markup=markup,
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.MARKDOWN,
         disable_web_page_preview=True,
     )
 
@@ -165,7 +165,7 @@ async def handle_search_callback(
         await query.edit_message_text(
             f"⚠️ You have reached your limit of {config.MAX_REPOS_PER_USER} tracked repositories.\n\n"
             "Please untrack a repository first using /untrack before tracking new ones!",
-            parse_mode=ParseMode.MARKDOWN_V2,
+            parse_mode=ParseMode.MARKDOWN,
         )
         return
 
@@ -180,7 +180,7 @@ async def handle_search_callback(
         await query.edit_message_text(
             f"✅ Now tracking `{owner}/{repo}`\\!\n\n"
             f"Use /list to see all your tracked repositories\\.",
-            parse_mode=ParseMode.MARKDOWN_V2,
+            parse_mode=ParseMode.MARKDOWN,
         )
     else:
         await query.edit_message_text("❌ Failed to add repository. Please try again.")

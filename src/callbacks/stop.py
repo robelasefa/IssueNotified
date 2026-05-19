@@ -24,7 +24,7 @@ async def stop_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         "This will remove your account and untrack all repositories. "
         "This action cannot be undone.",
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.MARKDOWN,
     )
 
 

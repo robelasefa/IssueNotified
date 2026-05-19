@@ -33,4 +33,4 @@ Example: `torvalds/linux`
 • Real-time issue notifications
 • GitHub repository search with one-tap tracking
 """
-    await update.message.reply_text(help_text.strip(), parse_mode=ParseMode.MARKDOWN_V2)
+    await update.message.reply_text(help_text.strip(), parse_mode=ParseMode.MARKDOWN)

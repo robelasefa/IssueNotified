@@ -34,5 +34,5 @@ async def list_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
             lines.append(line)
         await update.message.reply_text(
             header + "\n".join(lines),
-            parse_mode=ParseMode.MARKDOWN_V2,
+            parse_mode=ParseMode.MARKDOWN,
         )
