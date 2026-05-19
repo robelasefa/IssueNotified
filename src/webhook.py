@@ -7,12 +7,15 @@ Replaces the polling-based architecture with webhook endpoints:
 - GET  /health         — health check
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
 import logging
 import os
 import sys
+import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import cast
@@ -78,12 +81,7 @@ def build_ptb_application(token: str) -> Application:
     The updater is disabled (``updater=None``) because we feed updates
     manually from the FastAPI route handler.
     """
-    application = (
-        Application.builder()
-        .token(token)
-        .updater(None)
-        .build()
-    )
+    application = Application.builder().token(token).updater(None).build()
 
     # Command handlers
     application.add_handler(CommandHandler("start", start))
@@ -218,6 +216,39 @@ async def lifespan(fastapi_app: FastAPI):
 
 app = FastAPI(title="IssueNotified", lifespan=lifespan)
 
+# ---------------------------------------------------------------------------
+# Rate Limiting Middleware
+# ---------------------------------------------------------------------------
+
+RATE_LIMIT_WINDOW = 60  # seconds
+RATE_LIMIT_MAX_REQUESTS = 60  # max 60 requests per minute
+ip_request_history = defaultdict(deque)
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    # Only rate limit webhook endpoints to protect them from spam / DDoS floods
+    if request.url.path in ("/telegram", GITHUB_WEBHOOK_PATH):
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        history = ip_request_history[client_ip]
+
+        # Remove requests older than the sliding window
+        while history and history[0] < now - RATE_LIMIT_WINDOW:
+            history.popleft()
+
+        if len(history) >= RATE_LIMIT_MAX_REQUESTS:
+            logger.warning(f"Rate limit exceeded for client IP: {client_ip}")
+            return Response(
+                content=json.dumps({"detail": "Rate limit exceeded. Try again later."}),
+                status_code=429,
+                media_type="application/json",
+            )
+
+        history.append(now)
+
+    return await call_next(request)
+
 
 # ---------------------------------------------------------------------------
 # Route handlers
@@ -233,7 +264,15 @@ async def telegram_webhook(request: Request):
 
     data = await request.json()
     update = Update.de_json(data, request.app.state.ptb_app.bot)
-    await request.app.state.ptb_app.process_update(update)
+
+    try:
+        await asyncio.wait_for(
+            request.app.state.ptb_app.process_update(update), timeout=20.0
+        )
+    except asyncio.TimeoutError:
+        logger.error("Timeout processing Telegram update")
+        return Response(status_code=504)
+
     return Response(status_code=200)
 
 

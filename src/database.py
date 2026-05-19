@@ -4,6 +4,7 @@ Database module for IssueNotified bot using SQLite.
 
 import logging
 import sqlite3
+import threading
 from typing import Any, Dict, List, Optional, Set
 
 import config
@@ -21,6 +22,7 @@ class DatabaseManager:
             self.db_path = config.DATA_DIR / "issuenotified.db"
             config.DATA_DIR.mkdir(exist_ok=True)
 
+        self._lock = threading.RLock()
         self.init_database()
 
     def _connect(self) -> sqlite3.Connection:
@@ -106,31 +108,44 @@ class DatabaseManager:
         self, user_id: int, username: str = None, first_name: str = None
     ) -> bool:
         """Add a new user to database."""
-        try:
-            with self._connect() as conn:
-                conn.execute(
-                    "INSERT OR IGNORE INTO users (user_id, username, first_name) VALUES (?, ?, ?)",
-                    (user_id, username, first_name),
-                )
-                conn.commit()
-                return True
-        except sqlite3.Error as e:
-            logger.error(f"Error adding user: {e}")
-            return False
+        with self._lock:
+            try:
+                with self._connect() as conn:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO users (user_id, username, first_name) VALUES (?, ?, ?)",
+                        (user_id, username, first_name),
+                    )
+                    conn.commit()
+                    return True
+            except sqlite3.Error as e:
+                logger.error(f"Error adding user: {e}")
+                return False
 
     def delete_user(self, user_id: int) -> bool:
         """Remove a user and all their repository links from the database."""
-        try:
-            with self._connect() as conn:
-                conn.execute(
-                    "DELETE FROM user_repositories WHERE user_id = ?", (user_id,)
-                )
-                conn.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
-                conn.commit()
-                return True
-        except sqlite3.Error as e:
-            logger.error(f"Error deleting user {user_id}: {e}")
-            return False
+        with self._lock:
+            try:
+                # Find repository IDs this user was tracking to potentially clean them up
+                with self._connect() as conn:
+                    rows = conn.execute(
+                        "SELECT repository_id FROM user_repositories WHERE user_id = ?",
+                        (user_id,),
+                    ).fetchall()
+                    repo_ids = [row[0] for row in rows]
+
+                    conn.execute(
+                        "DELETE FROM user_repositories WHERE user_id = ?", (user_id,)
+                    )
+                    conn.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
+                    conn.commit()
+
+                    # Clean up unused repositories
+                    for repo_id in repo_ids:
+                        self.cleanup_repository_if_unused(repo_id)
+                    return True
+            except sqlite3.Error as e:
+                logger.error(f"Error deleting user {user_id}: {e}")
+                return False
 
     # ------------------------------------------------------------------
     # Repositories
@@ -138,21 +153,22 @@ class DatabaseManager:
 
     def add_repository(self, owner: str, name: str) -> Optional[int]:
         """Insert a repository if not present and return its ID."""
-        try:
-            with self._connect() as conn:
-                conn.execute(
-                    "INSERT OR IGNORE INTO repositories (owner, name) VALUES (?, ?)",
-                    (owner, name),
-                )
-                row = conn.execute(
-                    "SELECT id FROM repositories WHERE owner = ? AND name = ?",
-                    (owner, name),
-                ).fetchone()
-                conn.commit()
-                return row[0] if row else None
-        except sqlite3.Error as e:
-            logger.error(f"Error adding repository {owner}/{name}: {e}")
-            return None
+        with self._lock:
+            try:
+                with self._connect() as conn:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO repositories (owner, name) VALUES (?, ?)",
+                        (owner, name),
+                    )
+                    row = conn.execute(
+                        "SELECT id FROM repositories WHERE owner = ? AND name = ?",
+                        (owner, name),
+                    ).fetchone()
+                    conn.commit()
+                    return row[0] if row else None
+            except sqlite3.Error as e:
+                logger.error(f"Error adding repository {owner}/{name}: {e}")
+                return None
 
     def get_repository_id(self, owner: str, name: str) -> Optional[int]:
         """Return the DB id for a repository, or None if not found."""
@@ -173,32 +189,35 @@ class DatabaseManager:
         """Look up a repository by owner/name and return its ID and subscribers."""
         try:
             with self._connect() as conn:
-                row = conn.execute(
+                rows = conn.execute(
                     """
-                    SELECT
-                        r.id,
-                        GROUP_CONCAT(u.user_id || ':' || IFNULL(ur.keywords, ''))
+                    SELECT r.id, u.user_id, ur.keywords
                     FROM repositories r
                     JOIN user_repositories ur ON r.id = ur.repository_id
                     JOIN users u ON ur.user_id = u.user_id
                     WHERE r.owner = ? AND r.name = ?
-                    GROUP BY r.id
                     """,
                     (owner, name),
-                ).fetchone()
+                ).fetchall()
 
-                if not row:
-                    return None
+                if not rows:
+                    # Check if repository exists at all but has no subscribers
+                    repo_id = self.get_repository_id(owner, name)
+                    if not repo_id:
+                        return None
+                    return {"repo_id": repo_id, "subscribers": []}
+
+                repo_id = rows[0][0]
+                subscribers = []
+                for row in rows:
+                    subscribers.append({
+                        "user_id": row[1],
+                        "keywords": row[2]
+                    })
 
                 return {
-                    "repo_id": row[0],
-                    "subscribers": [
-                        {
-                            "user_id": int(s.split(":")[0]),
-                            "keywords": s.split(":")[1],
-                        }
-                        for s in row[1].split(",")
-                    ],
+                    "repo_id": repo_id,
+                    "subscribers": subscribers,
                 }
         except sqlite3.Error as e:
             logger.error(
@@ -210,25 +229,26 @@ class DatabaseManager:
         self, user_id: int, repository_id: int, keywords: Optional[str] = None
     ) -> bool:
         """Link a user to a repository with optional keyword filters."""
-        try:
-            with self._connect() as conn:
-                # Ensure the user exists in the users table first (Foreign Key requirement)
-                conn.execute(
-                    "INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,)
-                )
+        with self._lock:
+            try:
+                with self._connect() as conn:
+                    # Ensure the user exists in the users table first (Foreign Key requirement)
+                    conn.execute(
+                        "INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,)
+                    )
 
-                conn.execute(
-                    """
-                    INSERT OR IGNORE INTO user_repositories (user_id, repository_id, keywords)
-                    VALUES (?, ?, ?)
-                    """,
-                    (user_id, repository_id, keywords),
-                )
-                conn.commit()
-                return True
-        except sqlite3.Error as e:
-            logger.error(f"Error linking user {user_id} to repo {repository_id}: {e}")
-            return False
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO user_repositories (user_id, repository_id, keywords)
+                        VALUES (?, ?, ?)
+                        """,
+                        (user_id, repository_id, keywords),
+                    )
+                    conn.commit()
+                    return True
+            except sqlite3.Error as e:
+                logger.error(f"Error linking user {user_id} to repo {repository_id}: {e}")
+                return False
 
     def get_user_repositories(self, user_id: int) -> List[Dict[str, Any]]:
         """Return all repositories tracked by a user."""
@@ -285,41 +305,53 @@ class DatabaseManager:
 
     def remove_user_repository(self, user_id: int, owner: str, name: str) -> bool:
         """Remove a single repository from a user's tracking list."""
-        try:
-            with self._connect() as conn:
-                result = conn.execute(
-                    """
-                    DELETE FROM user_repositories
-                    WHERE user_id = ? AND repository_id IN (
-                        SELECT id FROM repositories WHERE owner = ? AND name = ?
+        with self._lock:
+            try:
+                repo_id = self.get_repository_id(owner, name)
+                if not repo_id:
+                    return False
+
+                with self._connect() as conn:
+                    result = conn.execute(
+                        """
+                        DELETE FROM user_repositories
+                        WHERE user_id = ? AND repository_id = ?
+                        """,
+                        (user_id, repo_id),
                     )
-                    """,
-                    (user_id, owner, name),
-                )
-                conn.commit()
+                    conn.commit()
 
-                if result.rowcount > 0:
-                    # Clean up the repository if it has no more subscribers
-                    self.cleanup_unused_repositories()
+                    if result.rowcount > 0:
+                        self.cleanup_repository_if_unused(repo_id)
 
-                return result.rowcount > 0
-        except sqlite3.Error as e:
-            logger.error(f"Error removing {owner}/{name} for user {user_id}: {e}")
-            return False
+                    return result.rowcount > 0
+            except sqlite3.Error as e:
+                logger.error(f"Error removing {owner}/{name} for user {user_id}: {e}")
+                return False
 
     def remove_all_user_repositories(self, user_id: int) -> bool:
         """Remove all repositories for a user."""
-        try:
-            with self._connect() as conn:
-                conn.execute(
-                    "DELETE FROM user_repositories WHERE user_id = ?", (user_id,)
-                )
-                conn.commit()
-                self.cleanup_unused_repositories()
-                return True
-        except sqlite3.Error as e:
-            logger.error(f"Error removing all repositories for user {user_id}: {e}")
-            return False
+        with self._lock:
+            try:
+                with self._connect() as conn:
+                    rows = conn.execute(
+                        "SELECT repository_id FROM user_repositories WHERE user_id = ?",
+                        (user_id,),
+                    ).fetchall()
+                    repo_ids = [row[0] for row in rows]
+
+                    conn.execute(
+                        "DELETE FROM user_repositories WHERE user_id = ?", (user_id,)
+                    )
+                    conn.commit()
+
+                    # Clean up unused repositories
+                    for repo_id in repo_ids:
+                        self.cleanup_repository_if_unused(repo_id)
+                    return True
+            except sqlite3.Error as e:
+                logger.error(f"Error removing all repositories for user {user_id}: {e}")
+                return False
 
     # ------------------------------------------------------------------
     # Issue tracking
@@ -341,17 +373,18 @@ class DatabaseManager:
         self, issue_id: str, repository_id: int, title: str, url: str
     ) -> bool:
         """Record that an issue event has been notified."""
-        try:
-            with self._connect() as conn:
-                conn.execute(
-                    "INSERT OR IGNORE INTO tracked_issues (issue_id, repository_id, title, url) VALUES (?, ?, ?, ?)",
-                    (issue_id, repository_id, title, url),
-                )
-                conn.commit()
-                return True
-        except sqlite3.Error as e:
-            logger.error(f"Error adding tracked issue {issue_id}: {e}")
-            return False
+        with self._lock:
+            try:
+                with self._connect() as conn:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO tracked_issues (issue_id, repository_id, title, url) VALUES (?, ?, ?, ?)",
+                        (issue_id, repository_id, title, url),
+                    )
+                    conn.commit()
+                    return True
+            except sqlite3.Error as e:
+                logger.error(f"Error adding tracked issue {issue_id}: {e}")
+                return False
 
     def get_tracked_issue_ids_for_repo(self, repository_id: int) -> Set[str]:
         """Return the set of already-notified issue IDs for a repository."""
@@ -381,47 +414,50 @@ class DatabaseManager:
                         r.id, 
                         r.owner, 
                         r.name, 
-                        GROUP_CONCAT(u.user_id || ':' || IFNULL(ur.keywords, '')), 
+                        u.user_id,
+                        ur.keywords,
                         r.last_checked_at
                     FROM repositories r
                     JOIN user_repositories ur ON r.id = ur.repository_id
                     JOIN users u ON ur.user_id = u.user_id
-                    GROUP BY r.id, r.owner, r.name
                     """
                 ).fetchall()
-                return [
-                    {
-                        "repo_id": row[0],
-                        "owner": row[1],
-                        "name": row[2],
-                        "subscribers": [
-                            {
-                                "user_id": int(s.split(":")[0]),
-                                "keywords": s.split(":")[1],
-                            }
-                            for s in row[3].split(",")
-                        ],
-                        "last_checked_at": row[4],
-                    }
-                    for row in rows
-                ]
+
+                # Group by repository ID in Python to avoid GROUP_CONCAT parsing bugs
+                repos = {}
+                for row in rows:
+                    repo_id, owner, name, user_id, keywords, last_checked = row
+                    if repo_id not in repos:
+                        repos[repo_id] = {
+                            "repo_id": repo_id,
+                            "owner": owner,
+                            "name": name,
+                            "subscribers": [],
+                            "last_checked_at": last_checked
+                        }
+                    repos[repo_id]["subscribers"].append({
+                        "user_id": user_id,
+                        "keywords": keywords
+                    })
+                return list(repos.values())
         except sqlite3.Error as e:
             logger.error(f"Error getting all tracked repositories: {e}")
             return []
 
     def update_repository_last_checked(self, repo_id: int) -> bool:
         """Update the last_checked_at timestamp for a repository."""
-        try:
-            with self._connect() as conn:
-                conn.execute(
-                    "UPDATE repositories SET last_checked_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (repo_id,),
-                )
-                conn.commit()
-                return True
-        except sqlite3.Error as e:
-            logger.error(f"Error updating last_checked_at for repo {repo_id}: {e}")
-            return False
+        with self._lock:
+            try:
+                with self._connect() as conn:
+                    conn.execute(
+                        "UPDATE repositories SET last_checked_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        (repo_id,),
+                    )
+                    conn.commit()
+                    return True
+            except sqlite3.Error as e:
+                logger.error(f"Error updating last_checked_at for repo {repo_id}: {e}")
+                return False
 
     def get_all_user_ids(self) -> List[int]:
         """Return all unique user IDs in the database."""
@@ -482,17 +518,18 @@ class DatabaseManager:
 
     def add_webhook(self, repository_id: int, github_hook_id: int) -> bool:
         """Record a GitHub webhook installation for a repository."""
-        try:
-            with self._connect() as conn:
-                conn.execute(
-                    "INSERT OR REPLACE INTO webhooks (repository_id, github_hook_id) VALUES (?, ?)",
-                    (repository_id, github_hook_id),
-                )
-                conn.commit()
-                return True
-        except sqlite3.Error as e:
-            logger.error(f"Error adding webhook for repo {repository_id}: {e}")
-            return False
+        with self._lock:
+            try:
+                with self._connect() as conn:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO webhooks (repository_id, github_hook_id) VALUES (?, ?)",
+                        (repository_id, github_hook_id),
+                    )
+                    conn.commit()
+                    return True
+            except sqlite3.Error as e:
+                logger.error(f"Error adding webhook for repo {repository_id}: {e}")
+                return False
 
     def get_webhook(self, repository_id: int) -> Optional[int]:
         """Return the GitHub hook ID for a repository, or None."""
@@ -509,58 +546,57 @@ class DatabaseManager:
 
     def remove_webhook(self, repository_id: int) -> bool:
         """Remove the webhook record for a repository."""
-        try:
-            with self._connect() as conn:
-                conn.execute(
-                    "DELETE FROM webhooks WHERE repository_id = ?", (repository_id,)
-                )
-                conn.commit()
-                return True
-        except sqlite3.Error as e:
-            logger.error(f"Error removing webhook for repo {repository_id}: {e}")
-            return False
+        with self._lock:
+            try:
+                with self._connect() as conn:
+                    conn.execute(
+                        "DELETE FROM webhooks WHERE repository_id = ?", (repository_id,)
+                    )
+                    conn.commit()
+                    return True
+            except sqlite3.Error as e:
+                logger.error(f"Error removing webhook for repo {repository_id}: {e}")
+                return False
 
     # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------
 
-    def cleanup_unused_repositories(self):
+    def cleanup_repository_if_unused(self, repository_id: int) -> None:
         """
-        Delete repositories that no longer have any subscribers.
-        Also removes their associated tracked issues and webhook records.
+        Delete a single repository if it no longer has subscribers.
+        Also removes its associated tracked issues and webhook records.
         """
-        try:
-            with self._connect() as conn:
-                # Remove webhook records for repos with no subscribers
-                conn.execute(
-                    """
-                    DELETE FROM webhooks
-                    WHERE repository_id NOT IN (
-                        SELECT DISTINCT repository_id FROM user_repositories
-                    )
-                    """
-                )
-                # Remove tracked issues for repos with no subscribers
-                conn.execute(
-                    """
-                    DELETE FROM tracked_issues
-                    WHERE repository_id NOT IN (
-                        SELECT DISTINCT repository_id FROM user_repositories
-                    )
-                    """
-                )
-                # Remove the repositories themselves
-                conn.execute(
-                    """
-                    DELETE FROM repositories
-                    WHERE id NOT IN (
-                        SELECT DISTINCT repository_id FROM user_repositories
-                    )
-                    """
-                )
-                conn.commit()
-        except sqlite3.Error as e:
-            logger.error(f"Error during repository cleanup: {e}")
+        with self._lock:
+            try:
+                with self._connect() as conn:
+                    # Check if there are any user subscriptions left for this repository
+                    row = conn.execute(
+                        "SELECT COUNT(*) FROM user_repositories WHERE repository_id = ?",
+                        (repository_id,),
+                    ).fetchone()
+                    sub_count = row[0] if row else 0
+
+                    if sub_count == 0:
+                        # Clean up webhook records for this repo
+                        conn.execute(
+                            "DELETE FROM webhooks WHERE repository_id = ?",
+                            (repository_id,),
+                        )
+                        # Clean up tracked issues for this repo
+                        conn.execute(
+                            "DELETE FROM tracked_issues WHERE repository_id = ?",
+                            (repository_id,),
+                        )
+                        # Clean up the repository itself
+                        conn.execute(
+                            "DELETE FROM repositories WHERE id = ?",
+                            (repository_id,),
+                        )
+                        conn.commit()
+                        logger.info(f"Cleaned up unused repository ID {repository_id}")
+            except sqlite3.Error as e:
+                logger.error(f"Error during repository cleanup for repo {repository_id}: {e}")
 
 
 # Global database instance

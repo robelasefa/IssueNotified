@@ -30,8 +30,14 @@ jobs:
           python -m venv antenv
           source antenv/bin/activate
           pip install -r requirements.txt
+
+      # Run tests to ensure build is correct before deployment
+      - name: Run tests
+        run: |
+          source antenv/bin/activate
+          pytest tests/ -v
                 
-      # Upload built artifact (excluding virtual env) for deployment
+      # Upload built artifact (excluding venv) for deployment
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
         with:

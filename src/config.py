@@ -3,7 +3,6 @@ Configuration module for IssueNotified bot.
 """
 
 import os
-import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -14,7 +13,11 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DEV_BOT_TOKEN = os.getenv("DEV_BOT_TOKEN")
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
-ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID", "0"))
+
+try:
+    ADMIN_USER_ID = int(os.getenv("ADMIN_USER_ID") or "0")
+except ValueError:
+    ADMIN_USER_ID = 0
 
 # GitHub configuration
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
@@ -29,7 +32,17 @@ else:
 
 # Webhook configuration
 WEBHOOK_BASE_URL = os.getenv("WEBHOOK_BASE_URL", "").rstrip("/")
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", str(uuid.uuid4()))
+
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+if not WEBHOOK_SECRET:
+    if os.getenv("WEBSITE_INSTANCE_ID"):
+        raise RuntimeError(
+            "WEBHOOK_SECRET environment variable is missing and is required in production!"
+        )
+    else:
+        # Fallback to local dev secret
+        WEBHOOK_SECRET = "dev_default_secret_please_change"
+
 GITHUB_WEBHOOK_PATH = "/github/webhook"
 PORT = int(os.getenv("PORT", "8443"))
 
