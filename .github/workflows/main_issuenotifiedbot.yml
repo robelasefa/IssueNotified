@@ -35,7 +35,7 @@ jobs:
       - name: Run tests
         run: |
           source antenv/bin/activate
-          pytest tests/ -v
+          PYTHONPATH=. pytest tests/ -v
                 
       # Upload built artifact (excluding venv) for deployment
       - name: Upload artifact for deployment jobs
