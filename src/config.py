@@ -22,6 +22,9 @@ except ValueError:
 # GitHub configuration
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
+# AI / Gemini configuration
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 # Database configuration (SQLite)
 # In Azure App Service Linux, only /home is persistent. We use /home/data in production
 # and fall back to local 'data' directory for local development.

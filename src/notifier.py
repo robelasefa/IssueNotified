@@ -12,6 +12,7 @@ from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
 from database import db
 from github import format_webhook_issue
+from ai import ai_client
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,11 @@ def _format_notification(owner: str, repo: str, issue: dict) -> str:
         time_message.strip(),
     ]
 
-    if description:
+    ai_summary = issue.get("ai_summary")
+
+    if ai_summary:
+        lines += ["", f"🤖 *AI Summary:*\n_{ai_summary}_"]
+    elif description:
         excerpt = description[:300] + ("…" if len(description) > 300 else "")
         lines += ["", excerpt]
 
@@ -123,6 +128,19 @@ async def process_github_webhook_event(payload: dict, bot: Bot) -> None:
     # Deduplicate: skip if already notified
     if db.is_issue_tracked(issue_id):
         return
+
+    # Try to get an AI summary (fails gracefully if API key is not set or times out)
+    summary = None
+    try:
+        summary = await ai_client.summarize_issue(
+            title=issue_info.get("title", ""),
+            description=issue_info.get("description", "")
+        )
+    except Exception as e:
+        logger.error(f"Error getting AI summary for {issue_id}: {e}")
+        
+    if summary:
+        issue_info["ai_summary"] = summary
 
     # Record issue before sending to prevent duplicates on crash
     db.add_tracked_issue(

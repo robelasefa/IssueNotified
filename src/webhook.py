@@ -56,6 +56,7 @@ from config import (
 from error import error_handler
 from github import initialize_github_client
 from notifier import process_github_webhook_event
+from ai import ai_client, initialize_ai_client
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +181,15 @@ async def lifespan(fastapi_app: FastAPI):
     else:
         logger.warning("GITHUB_TOKEN not set — GitHub features will be unavailable.")
 
+    # Initialise AI client
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if gemini_key:
+        initialize_ai_client(gemini_key)
+        await ai_client.start()
+        logger.info("Gemini AI client initialised.")
+    else:
+        logger.warning("GEMINI_API_KEY not set — AI features will be gracefully disabled.")
+
     # Start the PTB application (without polling)
     await ptb_app.initialize()
     await ptb_app.start()
@@ -211,6 +221,10 @@ async def lifespan(fastapi_app: FastAPI):
 
     await ptb_app.stop()
     await ptb_app.shutdown()
+    
+    # Stop the AI client
+    await ai_client.stop()
+    
     logger.info("IssueNotified webhook server stopped.")
 
 

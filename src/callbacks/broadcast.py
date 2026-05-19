@@ -16,6 +16,7 @@ from telegram.ext import (
 )
 from telegram.warnings import PTBUserWarning
 
+from ai import ai_client
 import config
 from database import db
 
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 GET_MESSAGE, CONFIRM = range(2)
 _CB_CONFIRM = "broadcast|confirm"
 _CB_CANCEL = "broadcast|cancel"
+_CB_AI_POLISH = "broadcast|ai_polish"
 
 
 async def broadcast_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
@@ -79,6 +81,9 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
             InlineKeyboardButton("❌ Cancel", callback_data=_CB_CANCEL),
         ]
     ]
+    
+    if config.GEMINI_API_KEY:
+        keyboard.insert(0, [InlineKeyboardButton("✨ Polish with AI", callback_data=_CB_AI_POLISH)])
 
     await update.message.reply_text(
         "⚠️ *Are you sure you want to send this to ALL users?*",
@@ -96,12 +101,51 @@ async def handle_broadcast_callback(update: Update, context: ContextTypes.DEFAUL
 
     if query.data == _CB_CANCEL:
         await query.edit_message_text("❌ Broadcast cancelled.")
+        context.user_data.pop("broadcast_message", None)
         return ConversationHandler.END
 
     message = context.user_data.get("broadcast_message")
     if not message:
         await query.edit_message_text("❌ Error: No message found.")
         return ConversationHandler.END
+
+    if query.data == _CB_AI_POLISH:
+        await query.edit_message_text("✨ *Polishing your message with AI...*", parse_mode="Markdown")
+        
+        try:
+            polished = await ai_client.polish_broadcast(message)
+            if polished:
+                context.user_data["broadcast_message"] = polished
+                
+                keyboard = [
+                    [
+                        InlineKeyboardButton("✅ Confirm & Send", callback_data=_CB_CONFIRM),
+                        InlineKeyboardButton("❌ Cancel", callback_data=_CB_CANCEL),
+                    ]
+                ]
+                
+                await query.message.reply_text(
+                    "✨ *AI Polished Preview:*", parse_mode="Markdown"
+                )
+                
+                await query.message.reply_text(
+                    polished,
+                    parse_mode="Markdown",
+                )
+                
+                await query.message.reply_text(
+                    "⚠️ *Are you sure you want to send this to ALL users?*",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode="Markdown",
+                )
+                return CONFIRM
+            else:
+                await query.message.reply_text("❌ AI polishing failed. Please confirm your original message or cancel.", parse_mode="Markdown")
+                return CONFIRM
+        except Exception as e:
+            logger.error(f"Error polishing broadcast: {e}")
+            await query.message.reply_text("❌ AI polishing encountered an error. Please confirm your original message or cancel.", parse_mode="Markdown")
+            return CONFIRM
 
     await query.edit_message_text("🚀 *Broadcasting message...*", parse_mode="Markdown")
 
