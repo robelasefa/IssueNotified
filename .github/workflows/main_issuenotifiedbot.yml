@@ -7,7 +7,7 @@ name: Build and deploy Python app to Azure Web App - issuenotifiedbot
 on:
   push:
     branches:
-      - feature/webhook-fastapi
+      - main
   workflow_dispatch:
 
 jobs:
