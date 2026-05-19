@@ -242,9 +242,7 @@ class GitHubClient:
             logger.error(f"Error creating webhook for {owner}/{repo}: {e}")
             return None
 
-    async def delete_webhook(
-        self, owner: str, repo: str, hook_id: int
-    ) -> bool:
+    async def delete_webhook(self, owner: str, repo: str, hook_id: int) -> bool:
         """Delete a webhook from a GitHub repository."""
         await self.rate_limiter.wait_if_needed("github")
 
@@ -332,10 +330,11 @@ def _format_time_message(created_at: str) -> str:
         else:
             time_str = "just now"
 
-        release_time_str = release_time.strftime("%Y-%m-%d %H:%M UTC")
-        return f"\n🕐 {release_time_str} ({time_str})\n"
+        release_time_utc = release_time.astimezone(timezone.utc)
+        release_time_str = release_time_utc.strftime("%Y-%m-%d %I:%M %p %Z")
+        return f"🕐 {release_time_str} ({time_str})\n"
     except ValueError:
-        return "\n🕐 Time released: Unknown\n"
+        return "🕐 Time released: Unknown\n"
 
 
 # ---------------------------------------------------------------------------

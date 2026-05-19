@@ -7,7 +7,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 # Bot configuration
 BOT_TOKEN = os.getenv("BOT_TOKEN")

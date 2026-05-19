@@ -10,9 +10,9 @@ from typing import Any, Dict
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
+from ai import ai_client
 from database import db
 from github import format_webhook_issue
-from ai import ai_client
 
 logger = logging.getLogger(__name__)
 
@@ -23,35 +23,40 @@ def _format_notification(owner: str, repo: str, issue: dict) -> str:
     description = (issue.get("description") or "").strip()
     tags = issue.get("tags", [])
     assignee = issue.get("assignee")
-    time_message = issue.get("release_time_message", "")
+    time_message = issue.get("release_time_message", "").strip()
     number = issue.get("number", "?")
-
-    event_type = issue.get("event_type", "opened")
-    icon = "🔔" if event_type == "opened" else "✅"
-    action = "New Issue" if event_type == "opened" else "Issue Closed"
-
-    header = f"{icon} *{action} in {owner}/{repo}*"
-
-    lines = [
-        header,
-        "",
-        f"*#{number} — {title}*",
-        time_message.strip(),
-    ]
-
     ai_summary = issue.get("ai_summary")
 
-    if ai_summary:
-        lines += ["", f"🤖 *AI Summary:*\n_{ai_summary}_"]
-    elif description:
-        excerpt = description[:300] + ("…" if len(description) > 300 else "")
-        lines += ["", excerpt]
+    event_type = issue.get("event_type", "opened")
 
+    config = {
+        "opened": {"icon": "🔔", "label": "NEW ISSUE"},
+        "closed": {"icon": "✅", "label": "CLOSED"},
+        "reopened": {"icon": "🔁", "label": "REOPENED"},
+    }
+    ev = config.get(event_type, config["opened"])
+
+    lines = [
+        f"{ev['icon']} *{ev['label']}* • *{owner}/{repo}*",
+        "",
+        f"*#{number} — {title}*",
+    ]
+
+    lines.append(time_message)
+
+    meta = []
     if tags:
-        lines += ["", "🏷️ " + "  ".join(f"`{t}`" for t in tags)]
-
+        meta.append("🏷️ " + "  ".join(f"`{t}`" for t in tags[:5]))
     if assignee:
-        lines += [f"👤 Assigned to @{assignee}"]
+        meta.append(f"👤 @{assignee}")
+    if meta:
+        lines += ["", "  ".join(meta)]
+
+    if ai_summary:
+        lines += ["", "✨ *AI Summary:*", f"_{ai_summary}_"]
+    elif description:
+        excerpt = description[:280] + ("..." if len(description) > 280 else "")
+        lines += ["", f"_{excerpt}_"]
 
     return "\n".join(lines)
 
@@ -134,11 +139,11 @@ async def process_github_webhook_event(payload: dict, bot: Bot) -> None:
     try:
         summary = await ai_client.summarize_issue(
             title=issue_info.get("title", ""),
-            description=issue_info.get("description", "")
+            description=issue_info.get("description", ""),
         )
     except Exception as e:
         logger.error(f"Error getting AI summary for {issue_id}: {e}")
-        
+
     if summary:
         issue_info["ai_summary"] = summary
 

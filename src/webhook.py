@@ -34,6 +34,7 @@ from telegram import (
 )
 from telegram.ext import Application, CommandHandler
 
+from ai import ai_client, initialize_ai_client
 from callbacks.broadcast import broadcast_conv_handler
 from callbacks.feedback import feedback_command
 from callbacks.help import help_command
@@ -56,7 +57,6 @@ from config import (
 from error import error_handler
 from github import initialize_github_client
 from notifier import process_github_webhook_event
-from ai import ai_client, initialize_ai_client
 
 logger = logging.getLogger(__name__)
 

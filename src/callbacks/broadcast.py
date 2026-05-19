@@ -16,8 +16,8 @@ from telegram.ext import (
 )
 from telegram.warnings import PTBUserWarning
 
-from ai import ai_client
 import config
+from ai import ai_client
 from database import db
 
 logger = logging.getLogger(__name__)
