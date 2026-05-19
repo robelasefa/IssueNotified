@@ -210,10 +210,7 @@ class DatabaseManager:
                 repo_id = rows[0][0]
                 subscribers = []
                 for row in rows:
-                    subscribers.append({
-                        "user_id": row[1],
-                        "keywords": row[2]
-                    })
+                    subscribers.append({"user_id": row[1], "keywords": row[2]})
 
                 return {
                     "repo_id": repo_id,
@@ -247,7 +244,9 @@ class DatabaseManager:
                     conn.commit()
                     return True
             except sqlite3.Error as e:
-                logger.error(f"Error linking user {user_id} to repo {repository_id}: {e}")
+                logger.error(
+                    f"Error linking user {user_id} to repo {repository_id}: {e}"
+                )
                 return False
 
     def get_user_repositories(self, user_id: int) -> List[Dict[str, Any]]:
@@ -433,12 +432,11 @@ class DatabaseManager:
                             "owner": owner,
                             "name": name,
                             "subscribers": [],
-                            "last_checked_at": last_checked
+                            "last_checked_at": last_checked,
                         }
-                    repos[repo_id]["subscribers"].append({
-                        "user_id": user_id,
-                        "keywords": keywords
-                    })
+                    repos[repo_id]["subscribers"].append(
+                        {"user_id": user_id, "keywords": keywords}
+                    )
                 return list(repos.values())
         except sqlite3.Error as e:
             logger.error(f"Error getting all tracked repositories: {e}")
@@ -596,7 +594,9 @@ class DatabaseManager:
                         conn.commit()
                         logger.info(f"Cleaned up unused repository ID {repository_id}")
             except sqlite3.Error as e:
-                logger.error(f"Error during repository cleanup for repo {repository_id}: {e}")
+                logger.error(
+                    f"Error during repository cleanup for repo {repository_id}: {e}"
+                )
 
 
 # Global database instance
