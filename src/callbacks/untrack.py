@@ -101,6 +101,7 @@ async def handle_untrack_callback(update: Update, _: ContextTypes.DEFAULT_TYPE) 
             "❌ Could not remove that repository. It may have already been removed."
         )
 
+
 untrack_callback_handler = CallbackQueryHandler(
     handle_untrack_callback, pattern=r"^untrack\|"
 )

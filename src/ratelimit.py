@@ -9,13 +9,13 @@ class RateLimiter:
 
     def __init__(self, max_requests: int = 5000, time_window: int = 3600):
         self.max_requests = max_requests
-        self.time_window  = time_window
+        self.time_window = time_window
         self._requests: Dict[str, deque] = defaultdict(deque)
-        self._locks:    Dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self._locks: Dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     async def acquire(self, key: str = "default") -> bool:
         async with self._locks[key]:
-            now      = time.time()
+            now = time.time()
             requests = self._requests[key]
 
             while requests and requests[0] <= now - self.time_window:
@@ -28,7 +28,7 @@ class RateLimiter:
 
     async def wait_if_needed(self, key: str = "default") -> None:
         while not await self.acquire(key):
-            oldest    = self._requests[key][0] if self._requests[key] else time.time()
+            oldest = self._requests[key][0] if self._requests[key] else time.time()
             wait_time = (oldest + self.time_window) - time.time()
             if wait_time > 0:
                 await asyncio.sleep(min(wait_time, 60))

@@ -357,8 +357,7 @@ class DatabaseManager:
     def get_all_tracked_repositories(self) -> List[Dict[str, Any]]:
         try:
             with self._connect() as conn:
-                rows = conn.execute(
-                    """
+                rows = conn.execute("""
                     SELECT 
                         r.id, 
                         r.owner, 
@@ -369,8 +368,7 @@ class DatabaseManager:
                     FROM repositories r
                     JOIN user_repositories ur ON r.id = ur.repository_id
                     JOIN users u ON ur.user_id = u.user_id
-                    """
-                ).fetchall()
+                    """).fetchall()
 
                 repos = {}
                 for row in rows:

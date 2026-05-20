@@ -51,7 +51,9 @@ class AIClient:
                     if response.status == 200:
                         data = await response.json()
                         try:
-                            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                            return data["candidates"][0]["content"]["parts"][0][
+                                "text"
+                            ].strip()
                         except (KeyError, IndexError):
                             logger.warning(
                                 "Gemini response missing expected candidates (safety block?): %s",

@@ -137,7 +137,7 @@ async def lifespan(fastapi_app: FastAPI):
     token = _get_token()
     ptb_app = _build_ptb_application(token)
 
-    fastapi_app.state.ptb_app         = ptb_app
+    fastapi_app.state.ptb_app = ptb_app
     fastapi_app.state.telegram_secret = generate_telegram_secret(token)
 
     github_token = os.getenv("GITHUB_TOKEN")
