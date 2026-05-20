@@ -47,6 +47,7 @@ from config import (
 from error import error_handler
 from github import initialize_github_client
 from notifier import process_github_webhook_event
+from poller import poll_repositories
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,9 @@ def _build_ptb_application(token: str) -> Application:
     app.add_handler(search_callback_handler)
 
     app.add_error_handler(error_handler)
+
+    if app.job_queue:
+        app.job_queue.run_repeating(poll_repositories, interval=300, first=10)
 
     return app
 

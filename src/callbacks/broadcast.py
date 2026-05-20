@@ -25,15 +25,28 @@ _CB_CANCEL = "broadcast|cancel"
 _CB_AI_POLISH = "broadcast|ai_polish"
 
 
-async def broadcast_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
-    user_id = update.effective_user.id
+def _confirm_keyboard(include_ai: bool = False) -> InlineKeyboardMarkup:
+    rows = []
+    if include_ai:
+        rows.append(
+            [InlineKeyboardButton("✨ Polish with AI", callback_data=_CB_AI_POLISH)]
+        )
+    rows.append(
+        [
+            InlineKeyboardButton("✅ Confirm & Send", callback_data=_CB_CONFIRM),
+            InlineKeyboardButton("❌ Cancel", callback_data=_CB_CANCEL),
+        ]
+    )
+    return InlineKeyboardMarkup(rows)
 
-    if user_id != config.ADMIN_USER_ID:
+
+async def broadcast_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
+    if update.effective_user.id != config.ADMIN_USER_ID:
         return ConversationHandler.END
 
     await update.message.reply_text(
         "📢 *Admin Broadcast*\n\n"
-        "Please send the message you want to broadcast to all users.\n"
+        "Send the message you want to broadcast to all users.\n"
         "You can use Markdown formatting.\n\n"
         "Type /cancel to abort.",
         parse_mode=ParseMode.MARKDOWN,
@@ -46,49 +59,26 @@ async def handle_broadcast_message(
 ) -> int:
     context.user_data["broadcast_message"] = update.message.text
 
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Confirm & Send", callback_data=_CB_CONFIRM),
-            InlineKeyboardButton("❌ Cancel", callback_data=_CB_CANCEL),
-        ]
-    ]
-
     await update.message.reply_text(
         "📝 *Preview of your message:*", parse_mode=ParseMode.MARKDOWN
     )
 
     try:
         await update.message.reply_text(
-            update.message.text,
-            parse_mode=ParseMode.MARKDOWN,
+            update.message.text, parse_mode=ParseMode.MARKDOWN
         )
     except Exception as e:
         await update.message.reply_text(
-            f"❌ *Formatting Error*\n\n"
-            f"Your message contains invalid Markdown: `{str(e)}`\n\n"
-            "Please fix it and send the message again, or type /cancel.",
+            f"❌ *Formatting Error*\n\nInvalid Markdown: `{e}`\n\nFix it and resend, or type /cancel.",
             parse_mode=ParseMode.MARKDOWN,
         )
         return GET_MESSAGE
 
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Confirm & Send", callback_data=_CB_CONFIRM),
-            InlineKeyboardButton("❌ Cancel", callback_data=_CB_CANCEL),
-        ]
-    ]
-
-    if config.GEMINI_API_KEY:
-        keyboard.insert(
-            0, [InlineKeyboardButton("✨ Polish with AI", callback_data=_CB_AI_POLISH)]
-        )
-
     await update.message.reply_text(
-        "⚠️ *Are you sure you want to send this to ALL users?*",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        "⚠️ *Send this to ALL users?*",
+        reply_markup=_confirm_keyboard(include_ai=bool(config.GEMINI_API_KEY)),
         parse_mode=ParseMode.MARKDOWN,
     )
-
     return CONFIRM
 
 
@@ -110,64 +100,44 @@ async def handle_broadcast_callback(
 
     if query.data == _CB_AI_POLISH:
         await query.edit_message_text(
-            "✨ *Polishing your message with AI...*", parse_mode=ParseMode.MARKDOWN
+            "✨ *Polishing with AI...*", parse_mode=ParseMode.MARKDOWN
         )
         try:
             polished = await ai_client.polish_broadcast(message, context.bot.username)
-            if polished:
-                context.user_data["broadcast_message"] = polished
-                keyboard = [
-                    [
-                        InlineKeyboardButton(
-                            "✅ Confirm & Send", callback_data=_CB_CONFIRM
-                        ),
-                        InlineKeyboardButton("❌ Cancel", callback_data=_CB_CANCEL),
-                    ]
-                ]
-
-                await query.edit_message_text(
-                    "✨ *AI Polished Preview:*", parse_mode=ParseMode.MARKDOWN
-                )
-                try:
-                    await query.message.reply_text(polished, parse_mode=ParseMode.HTML)
-                except Exception:
-                    # Fallback to plain text if HTML parsing fails
-                    await query.message.reply_text(polished)
-                await query.message.reply_text(
-                    "⚠️ *Are you sure you want to send this to ALL users?*",
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode=ParseMode.MARKDOWN,
-                )
-                return CONFIRM
-            else:
-                await query.message.reply_text(
-                    "❌ AI polishing failed. Please confirm your original message or cancel."
-                )
-                return CONFIRM
         except Exception as e:
             logger.error("Error polishing broadcast: %s", e)
-            await query.message.reply_text(
-                "❌ AI polishing encountered an error. Please confirm your original message or cancel.",
-                parse_mode=ParseMode.MARKDOWN,
-            )
-            print(f"Error polishing broadcast: \n\n{e}\n\n")
-            return CONFIRM
+            polished = None
 
-    await query.edit_message_text(
-        "🚀 *Broadcasting message...*", parse_mode=ParseMode.MARKDOWN
-    )
+        if polished:
+            context.user_data["broadcast_message"] = polished
+            await query.edit_message_text(
+                "✨ *AI Polished Preview:*", parse_mode=ParseMode.MARKDOWN
+            )
+            try:
+                await query.message.reply_text(polished, parse_mode=ParseMode.HTML)
+            except Exception:
+                await query.message.reply_text(polished)
+        else:
+            await query.message.reply_text(
+                "❌ AI polishing failed. You can still send the original."
+            )
+
+        await query.message.reply_text(
+            "⚠️ *Send this to ALL users?*",
+            reply_markup=_confirm_keyboard(),
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        return CONFIRM
+
+    # _CB_CONFIRM
+    await query.edit_message_text("🚀 *Broadcasting...*", parse_mode=ParseMode.MARKDOWN)
 
     user_ids = db.get_all_user_ids()
-    total = len(user_ids)
-    success = 0
-    failed = 0
-
+    success = failed = 0
     for uid in user_ids:
         try:
             await context.bot.send_message(
-                chat_id=uid,
-                text=message,
-                parse_mode=ParseMode.HTML,
+                chat_id=uid, text=message, parse_mode=ParseMode.HTML
             )
             success += 1
         except Exception as e:
@@ -175,14 +145,12 @@ async def handle_broadcast_callback(
             failed += 1
 
     await query.edit_message_text(
-        "✅ *Broadcast Complete*\n\n"
-        f"📊 *Results:*\n"
-        f"• Total users: {total}\n"
-        f"• Successfully sent: {success}\n"
+        f"✅ *Broadcast Complete*\n\n"
+        f"• Total: {len(user_ids)}\n"
+        f"• Sent: {success}\n"
         f"• Failed: {failed}",
         parse_mode=ParseMode.MARKDOWN,
     )
-
     context.user_data.pop("broadcast_message", None)
     return ConversationHandler.END
 

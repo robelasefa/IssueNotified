@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
@@ -18,16 +18,14 @@ _EVENT_CONFIG = {
 
 
 def _format_notification(owner: str, repo: str, issue: dict) -> str:
+    ev = _EVENT_CONFIG.get(issue.get("event_type", "opened"), _EVENT_CONFIG["opened"])
+    number = issue.get("number", "?")
     title = issue.get("title", "No title")
-    description = (issue.get("description") or "").strip()
+    time_msg = issue.get("release_time_message", "").strip()
     tags = issue.get("tags", [])
     assignee = issue.get("assignee")
-    time_msg = issue.get("release_time_message", "").strip()
-    number = issue.get("number", "?")
     ai_summary = issue.get("ai_summary")
-    event_type = issue.get("event_type", "opened")
-
-    ev = _EVENT_CONFIG.get(event_type, _EVENT_CONFIG["opened"])
+    description = (issue.get("description") or "").strip()
 
     lines = [
         f"{ev['icon']} *{ev['label']}* • *{owner}/{repo}*",
@@ -58,7 +56,6 @@ def _format_notification(owner: str, repo: str, issue: dict) -> str:
 def _matches_keywords(issue_info: Dict[str, Any], keywords_str: str) -> bool:
     if not keywords_str:
         return True
-
     keywords = [k.strip().lower() for k in keywords_str.split(",") if k.strip()]
     if not keywords:
         return True
@@ -66,14 +63,14 @@ def _matches_keywords(issue_info: Dict[str, Any], keywords_str: str) -> bool:
     title = issue_info.get("title", "").lower()
     body = issue_info.get("description", "").lower()
     labels = [label.lower() for label in issue_info.get("tags", [])]
-
     return any(
-        kw in title or kw in body or any(kw in label for label in labels)
-        for kw in keywords
+        kw in title or kw in body or any(kw in l for l in labels) for kw in keywords
     )
 
 
-def _build_reply_markup(owner: str, name: str, issue_url: str):
+def _build_reply_markup(
+    owner: str, name: str, issue_url: str
+) -> InlineKeyboardMarkup | None:
     if not issue_url:
         return None
     return InlineKeyboardMarkup(
@@ -88,8 +85,51 @@ def _build_reply_markup(owner: str, name: str, issue_url: str):
     )
 
 
+async def _dispatch(
+    bot: Bot,
+    subscribers: List[Dict],
+    issue_info: Dict,
+    message: str,
+    reply_markup: InlineKeyboardMarkup | None,
+    owner: str,
+    repo_name: str,
+) -> None:
+    issue_id = issue_info.get("id")
+    for sub in subscribers:
+        if not _matches_keywords(issue_info, sub["keywords"]):
+            continue
+        try:
+            await bot.send_message(
+                chat_id=sub["user_id"],
+                text=message,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=reply_markup,
+                disable_web_page_preview=True,
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to notify user %s for %s/%s#%s: %s",
+                sub["user_id"],
+                owner,
+                repo_name,
+                issue_id,
+                e,
+            )
+
+
+async def _enrich_with_summary(issue_info: Dict) -> None:
+    try:
+        summary = await ai_client.summarize_issue(
+            title=issue_info.get("title", ""),
+            description=issue_info.get("description", ""),
+        )
+        if summary:
+            issue_info["ai_summary"] = summary
+    except Exception as e:
+        logger.error("AI summary failed for issue %s: %s", issue_info.get("id"), e)
+
+
 async def process_github_webhook_event(payload: dict, bot: Bot) -> None:
-    """Process a GitHub ``issues`` webhook event and dispatch Telegram notifications."""
     action = payload.get("action")
     if action not in ("opened", "closed", "reopened"):
         return
@@ -112,23 +152,17 @@ async def process_github_webhook_event(payload: dict, bot: Bot) -> None:
 
     issue_info = format_webhook_issue(payload)
     issue_id = issue_info.get("id")
+    # Append action so that opened/closed events for the same issue each trigger once
+    tracked_id = f"{issue_id}_{action}"
 
-    if not issue_id or db.is_issue_tracked(issue_id):
+    if not issue_id or db.is_issue_tracked(tracked_id):
         return
 
-    try:
-        summary = await ai_client.summarize_issue(
-            title=issue_info.get("title", ""),
-            description=issue_info.get("description", ""),
-        )
-        if summary:
-            issue_info["ai_summary"] = summary
-    except Exception as e:
-        logger.error("AI summary failed for issue %s: %s", issue_id, e)
+    await _enrich_with_summary(issue_info)
 
-    # Record before sending — prevents duplicate notifications if send loop crashes mid-flight.
+    # Persist before fan-out so a crash mid-send doesn't re-notify on restart
     db.add_tracked_issue(
-        issue_id=issue_id,
+        issue_id=tracked_id,
         repository_id=repo_id,
         title=issue_info.get("title", ""),
         url=issue_info.get("url", ""),
@@ -145,29 +179,7 @@ async def process_github_webhook_event(payload: dict, bot: Bot) -> None:
         repo_name,
     )
 
-    for sub in subscribers:
-        uid = sub["user_id"]
-        keywords = sub["keywords"]
-
-        if not _matches_keywords(issue_info, keywords):
-            continue
-
-        try:
-            await bot.send_message(
-                chat_id=uid,
-                text=message,
-                parse_mode=ParseMode.MARKDOWN,
-                reply_markup=reply_markup,
-                disable_web_page_preview=True,
-            )
-        except Exception as e:
-            logger.error(
-                "Failed to notify user %s for %s/%s#%s: %s",
-                uid,
-                owner,
-                repo_name,
-                issue_id,
-                e,
-            )
-
+    await _dispatch(
+        bot, subscribers, issue_info, message, reply_markup, owner, repo_name
+    )
     db.update_repository_last_checked(repo_id)

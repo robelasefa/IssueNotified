@@ -31,4 +31,4 @@ if not WEBHOOK_SECRET:
 GITHUB_WEBHOOK_PATH = "/github/webhook"
 PORT = int(os.getenv("PORT", "8443"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "10"))
-MAX_REPOS_PER_USER = int(os.getenv("MAX_REPOS_PER_USER", "10"))
+MAX_REPOS_PER_USER = int(os.getenv("MAX_REPOS_PER_USER", "5"))

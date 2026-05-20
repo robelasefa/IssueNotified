@@ -41,13 +41,13 @@ async def track_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
     return TRACK_REPO
 
 
-async def _try_create_webhook(owner: str, name: str, repo_id: int) -> None:
+async def _try_create_webhook(owner: str, name: str, repo_id: int) -> bool:
     github_client = get_github_client()
     if not github_client or not config.WEBHOOK_BASE_URL:
-        return
+        return False
 
     if db.get_webhook(repo_id):
-        return
+        return True
 
     webhook_url = f"{config.WEBHOOK_BASE_URL}{config.GITHUB_WEBHOOK_PATH}"
     hook_id = await github_client.create_webhook(
@@ -57,12 +57,14 @@ async def _try_create_webhook(owner: str, name: str, repo_id: int) -> None:
     if hook_id:
         db.add_webhook(repo_id, hook_id)
         logger.info("Webhook installed for %s/%s (hook_id=%s)", owner, name, hook_id)
+        return True
     else:
         logger.info(
             "Could not create webhook for %s/%s — manual intervention required",
             owner,
             name,
         )
+        return False
 
 
 async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
@@ -136,7 +138,15 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE) -> in
         msg += "\n\nYou'll be notified when new issues are opened, reopened or closed."
 
         await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
-        await _try_create_webhook(canonical_owner, canonical_name, repo_id)
+        
+        webhook_created = await _try_create_webhook(canonical_owner, canonical_name, repo_id)
+        if not webhook_created:
+            await update.message.reply_text(
+                "ℹ️ *Tracking via Polling*\n\n"
+                f"I couldn't automatically install a webhook for `{canonical_owner}/{canonical_name}` (usually because you don't have admin rights to it).\n\n"
+                "No worries! I will automatically track this repository by polling GitHub every 5 minutes for new updates.",
+                parse_mode=ParseMode.MARKDOWN
+            )
     else:
         await update.message.reply_text(
             "❌ Failed to save the repository. Please try again."

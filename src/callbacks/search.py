@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 _CB_PREFIX = "track|"
 
 
-def _make_track_callback(owner: str, repo: str) -> str:
+def _make_callback(owner: str, repo: str) -> str:
     return f"{_CB_PREFIX}{owner}|{repo}"
 
 
-def _parse_track_callback(data: str) -> Tuple[str, str]:
+def _parse_callback(data: str) -> Tuple[str, str]:
     _, owner, repo = data.split("|", 2)
     return owner, repo
 
@@ -44,46 +44,28 @@ def _build_results_message(
     keyboard = []
 
     for i, repo in enumerate(results[:10], 1):
-        owner = repo["owner"]
-        name = repo["name"]
-        desc_raw = repo.get("description") or "No description"
-        description = desc_raw[:60] + ("..." if len(desc_raw) > 60 else "")
-        stars = repo.get("stars", 0)
-        language = repo.get("language") or "Unknown"
+        owner, name = repo["owner"], repo["name"]
+        desc = (repo.get("description") or "No description")[:60]
         is_tracked = (owner, name) in tracked_set
 
-        status_icon = "✅" if is_tracked else "📂"
         repo_url = repo.get("url") or f"https://github.com/{owner}/{name}"
         lines.append(
-            f"{i}. {status_icon} **[{owner}/{name}]({repo_url})**\n"
-            f"   ⭐ {stars:,}  •  {language}\n"
-            f"   _{description}_\n"
+            f"{i}. {'✅' if is_tracked else '📂'} "
+            f"**[{owner}/{name}]({repo_url})**\n"
+            f"   ⭐ {repo.get('stars', 0):,}  •  {repo.get('language') or 'Unknown'}\n"
+            f"   _{desc}_\n"
         )
+        keyboard.append([InlineKeyboardButton(
+            f"✅ {owner}/{name} (tracked)" if is_tracked else f"➕ Track  {owner}/{name}",
+            callback_data=_make_callback(owner, name),
+        )])
 
-        btn_label = (
-            f"✅ {owner}/{name} (tracked)"
-            if is_tracked
-            else f"➕ Track  {owner}/{name}"
-        )
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    btn_label, callback_data=_make_track_callback(owner, name)
-                )
-            ]
-        )
-
-    total = len(results)
-    if total > 10:
-        lines.append(f"\n_Showing 10 of {total} results._")
+    if len(results) > 10:
+        lines.append(f"\n_Showing 10 of {len(results)} results._")
 
     lines.append(
         f"\n📊 *Tracked:* {len(current_repos)}/{config.MAX_REPOS_PER_USER}"
-        + (
-            f" — {slots_left} slot{'s' if slots_left != 1 else ''} remaining"
-            if slots_left > 0
-            else " — limit reached"
-        )
+        + (f" — {slots_left} slot{'s' if slots_left != 1 else ''} remaining" if slots_left > 0 else " — limit reached")
     )
 
     return "\n".join(lines), InlineKeyboardMarkup(keyboard)
@@ -94,22 +76,19 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(
             "🔍 *Usage:* `/search <repository_name>`\n\n"
             "Examples:\n"
-            "• `/search react` — search by repository name\n"
+            "• `/search react` — search by name\n"
             "• `/search facebook/react` — search within an owner's repos\n",
             parse_mode=ParseMode.MARKDOWN,
         )
         return
 
-    search_term = " ".join(context.args).strip()
     github_client = get_github_client()
-
     if not github_client:
-        await update.message.reply_text(
-            "Sorry, this is on us not your problem! Please try again later."
-        )
-        logger.error("[CRITICAL] GITHUB CLIENT IS NOT INITIALISED!")
+        logger.error("GitHub client not initialised")
+        await update.message.reply_text("Sorry, GitHub search is unavailable right now. Please try again later.")
         return
 
+    search_term = " ".join(context.args).strip()
     loading_msg = await update.message.reply_text("🔍 Searching…")
     context.chat_data["search_loading_msg_id"] = loading_msg.message_id
 
@@ -117,44 +96,27 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         results = await github_client.search_repositories(search_term, per_page=10)
     except Exception as e:
         logger.error("search_repositories raised unexpectedly: %s", e)
-        await _delete_loading(context, update.effective_chat.id)
-        await update.message.reply_text(
-            "❌ An error occurred while searching. Please try again."
-        )
-        return
+        results = []
 
     await _delete_loading(context, update.effective_chat.id)
 
     if not results:
         await update.message.reply_text(
-            f"😕 No repositories found for `{search_term}`.\n\n"
-            "Try a different name or check the spelling.",
+            f"😕 No repositories found for `{search_term}`.\n\nTry a different name or check the spelling.",
             parse_mode=ParseMode.MARKDOWN,
         )
         return
 
-    user_id = update.effective_user.id
-    current_repos = db.get_user_repositories(user_id)
-
+    current_repos = db.get_user_repositories(update.effective_user.id)
     text, markup = _build_results_message(search_term, results, current_repos)
-    await update.message.reply_text(
-        text,
-        reply_markup=markup,
-        parse_mode=ParseMode.MARKDOWN,
-        disable_web_page_preview=True,
-    )
+    await update.message.reply_text(text, reply_markup=markup, parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
 
 
-async def handle_search_callback(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def handle_search_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
 
-    if not query.data.startswith(_CB_PREFIX):
-        return
-
-    owner, repo = _parse_track_callback(query.data)
+    owner, repo = _parse_callback(query.data)
     user_id = update.effective_user.id
 
     if db.is_user_tracking_repository(user_id, owner, repo):
@@ -163,29 +125,24 @@ async def handle_search_callback(
 
     if db.count_user_repositories(user_id) >= config.MAX_REPOS_PER_USER:
         await query.edit_message_text(
-            f"⚠️ You have reached your limit of {config.MAX_REPOS_PER_USER} tracked repositories.\n\n"
-            "Please untrack a repository first using /untrack before tracking new ones!",
+            f"⚠️ You've reached the {config.MAX_REPOS_PER_USER}-repo limit.\n\nUse /untrack to free up a slot.",
             parse_mode=ParseMode.MARKDOWN,
         )
         return
 
     repo_id = db.add_repository(owner, repo)
     if not repo_id:
-        await query.answer("❌ Error: Could not register repository.", show_alert=True)
+        await query.answer("❌ Could not register repository.", show_alert=True)
         return
 
-    success = db.link_user_repository(user_id, repo_id)
-    if success:
+    if db.link_user_repository(user_id, repo_id):
         logger.info("User %s added %s/%s via search", user_id, owner, repo)
         await query.edit_message_text(
-            f"✅ Now tracking `{owner}/{repo}`!\n\n"
-            f"Use /list to see all your tracked repositories.",
+            f"✅ Now tracking `{owner}/{repo}`!\n\nUse /list to see all your tracked repositories.",
             parse_mode=ParseMode.MARKDOWN,
         )
     else:
         await query.edit_message_text("❌ Failed to add repository. Please try again.")
 
 
-search_callback_handler = CallbackQueryHandler(
-    handle_search_callback, pattern=r"^track\|"
-)
+search_callback_handler = CallbackQueryHandler(handle_search_callback, pattern=r"^track\|")

@@ -1,4 +1,4 @@
-python-telegram-bot[rate-limiter]==21.5
+python-telegram-bot[job-queue,rate-limiter]==21.5
 python-dotenv
 aiohttp
 fastapi
