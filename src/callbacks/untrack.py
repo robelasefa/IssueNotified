@@ -10,8 +10,6 @@ from github import get_github_client
 
 logger = logging.getLogger(__name__)
 
-SELECT_REPO = 1
-
 _CB_PREFIX = "untrack|"
 
 
