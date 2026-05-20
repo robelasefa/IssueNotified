@@ -133,7 +133,7 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE) -> in
         msg = f"✅ Now tracking `{canonical_owner}/{canonical_name}`!"
         if keywords:
             msg += f"\n\n🔍 *Filter:* `{keywords}`"
-        msg += "\n\nYou'll be notified when new issues are opened or closed."
+        msg += "\n\nYou'll be notified when new issues are opened, reopened or closed."
 
         await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
         await _try_create_webhook(canonical_owner, canonical_name, repo_id)

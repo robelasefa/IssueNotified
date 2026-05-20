@@ -137,6 +137,8 @@ cp .env.example .env
 | `MAX_REPOS_PER_USER` | — | Per-user repository cap (default: `10`) |
 
 > **Never commit `.env`.** It is already excluded by `.gitignore`.
+>
+> See `SECURITY.md` for private vulnerability reporting and responsible disclosure guidance.
 
 ### 3. Run locally
 

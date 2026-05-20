@@ -73,7 +73,7 @@ async def untrack_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
         for repo in repositories
     ]
     keyboard.append(
-        [InlineKeyboardButton("Cancel Untracking", callback_data="untrack|cancel")]
+        [InlineKeyboardButton("❌ Cancel Untracking", callback_data="untrack|cancel")]
     )
 
     await update.message.reply_text(
