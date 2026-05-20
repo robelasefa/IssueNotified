@@ -75,7 +75,7 @@ def _build_results_message(
 
     total = len(results)
     if total > 10:
-        lines.append(f"\n_Showing 10 of {total} results\\._")
+        lines.append(f"\n_Showing 10 of {total} results._")
 
     lines.append(
         f"\n📊 *Tracked:* {len(current_repos)}/{config.MAX_REPOS_PER_USER}"
@@ -127,8 +127,8 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     if not results:
         await update.message.reply_text(
-            f"😕 No repositories found for `{search_term}`\\.\n\n"
-            "Try a different name or check the spelling\\.",
+            f"😕 No repositories found for `{search_term}`.\n\n"
+            "Try a different name or check the spelling.",
             parse_mode=ParseMode.MARKDOWN,
         )
         return
@@ -178,8 +178,8 @@ async def handle_search_callback(
     if success:
         logger.info("User %s added %s/%s via search", user_id, owner, repo)
         await query.edit_message_text(
-            f"✅ Now tracking `{owner}/{repo}`\\!\n\n"
-            f"Use /list to see all your tracked repositories\\.",
+            f"✅ Now tracking `{owner}/{repo}`!\n\n"
+            f"Use /list to see all your tracked repositories.",
             parse_mode=ParseMode.MARKDOWN,
         )
     else:
