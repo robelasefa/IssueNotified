@@ -5,7 +5,12 @@ from telegram.ext import ContextTypes
 
 from database import db
 from github import get_github_client
-from notifier import _build_reply_markup, _dispatch, _enrich_with_summary, _format_notification
+from notifier import (
+    _build_reply_markup,
+    _dispatch,
+    _enrich_with_summary,
+    _format_notification,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +51,8 @@ async def poll_repositories(context: ContextTypes.DEFAULT_TYPE) -> None:
 
             message = _format_notification(owner, name, issue_info)
             reply_markup = _build_reply_markup(owner, name, issue_info.get("url", ""))
-            await _dispatch(context.bot, subscribers, issue_info, message, reply_markup, owner, name)
+            await _dispatch(
+                context.bot, subscribers, issue_info, message, reply_markup, owner, name
+            )
 
         db.update_repository_last_checked(repo_id)

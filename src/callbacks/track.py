@@ -138,14 +138,16 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE) -> in
         msg += "\n\nYou'll be notified when new issues are opened, reopened or closed."
 
         await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
-        
-        webhook_created = await _try_create_webhook(canonical_owner, canonical_name, repo_id)
+
+        webhook_created = await _try_create_webhook(
+            canonical_owner, canonical_name, repo_id
+        )
         if not webhook_created:
             await update.message.reply_text(
                 "ℹ️ *Tracking via Polling*\n\n"
                 f"I couldn't automatically install a webhook for `{canonical_owner}/{canonical_name}` (usually because you don't have admin rights to it).\n\n"
                 "No worries! I will automatically track this repository by polling GitHub every 5 minutes for new updates.",
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.MARKDOWN,
             )
     else:
         await update.message.reply_text(

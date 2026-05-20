@@ -55,17 +55,29 @@ def _build_results_message(
             f"   ⭐ {repo.get('stars', 0):,}  •  {repo.get('language') or 'Unknown'}\n"
             f"   _{desc}_\n"
         )
-        keyboard.append([InlineKeyboardButton(
-            f"✅ {owner}/{name} (tracked)" if is_tracked else f"➕ Track  {owner}/{name}",
-            callback_data=_make_callback(owner, name),
-        )])
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    (
+                        f"✅ {owner}/{name} (tracked)"
+                        if is_tracked
+                        else f"➕ Track  {owner}/{name}"
+                    ),
+                    callback_data=_make_callback(owner, name),
+                )
+            ]
+        )
 
     if len(results) > 10:
         lines.append(f"\n_Showing 10 of {len(results)} results._")
 
     lines.append(
         f"\n📊 *Tracked:* {len(current_repos)}/{config.MAX_REPOS_PER_USER}"
-        + (f" — {slots_left} slot{'s' if slots_left != 1 else ''} remaining" if slots_left > 0 else " — limit reached")
+        + (
+            f" — {slots_left} slot{'s' if slots_left != 1 else ''} remaining"
+            if slots_left > 0
+            else " — limit reached"
+        )
     )
 
     return "\n".join(lines), InlineKeyboardMarkup(keyboard)
@@ -85,7 +97,9 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     github_client = get_github_client()
     if not github_client:
         logger.error("GitHub client not initialised")
-        await update.message.reply_text("Sorry, GitHub search is unavailable right now. Please try again later.")
+        await update.message.reply_text(
+            "Sorry, GitHub search is unavailable right now. Please try again later."
+        )
         return
 
     search_term = " ".join(context.args).strip()
@@ -109,10 +123,17 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     current_repos = db.get_user_repositories(update.effective_user.id)
     text, markup = _build_results_message(search_term, results, current_repos)
-    await update.message.reply_text(text, reply_markup=markup, parse_mode=ParseMode.MARKDOWN, disable_web_page_preview=True)
+    await update.message.reply_text(
+        text,
+        reply_markup=markup,
+        parse_mode=ParseMode.MARKDOWN,
+        disable_web_page_preview=True,
+    )
 
 
-async def handle_search_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_search_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     query = update.callback_query
     await query.answer()
 
@@ -145,4 +166,6 @@ async def handle_search_callback(update: Update, context: ContextTypes.DEFAULT_T
         await query.edit_message_text("❌ Failed to add repository. Please try again.")
 
 
-search_callback_handler = CallbackQueryHandler(handle_search_callback, pattern=r"^track\|")
+search_callback_handler = CallbackQueryHandler(
+    handle_search_callback, pattern=r"^track\|"
+)

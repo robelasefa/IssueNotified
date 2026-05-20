@@ -37,9 +37,21 @@ async def test_get_repository_info_not_found(client):
 @pytest.mark.asyncio
 async def test_get_new_issues_filtering(client):
     events = [
-        {"id": "1", "event": "opened", "issue": {"number": 1, "title": "New", "html_url": "url"}},
-        {"id": "2", "event": "closed", "issue": {"number": 2, "title": "Closed", "html_url": "url"}},
-        {"id": "3", "event": "labeled", "issue": {"number": 3, "title": "Ignored", "html_url": "url"}},
+        {
+            "id": "1",
+            "event": "opened",
+            "issue": {"number": 1, "title": "New", "html_url": "url"},
+        },
+        {
+            "id": "2",
+            "event": "closed",
+            "issue": {"number": 2, "title": "Closed", "html_url": "url"},
+        },
+        {
+            "id": "3",
+            "event": "labeled",
+            "issue": {"number": 3, "title": "Ignored", "html_url": "url"},
+        },
     ]
     mock_response = AsyncMock(spec=aiohttp.ClientResponse)
     mock_response.status = 200
