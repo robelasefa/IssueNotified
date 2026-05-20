@@ -34,7 +34,7 @@ from callbacks.start import start
 from callbacks.stats import stats_command
 from callbacks.stop import stop_callback_handler, stop_command
 from callbacks.track import track_conv_handler
-from callbacks.untrack import untrack_callback_handler, untrack_conv_handler
+from callbacks.untrack import untrack_callback_handler, untrack_command
 from config import (
     ADMIN_USER_ID,
     BOT_TOKEN,
@@ -73,19 +73,19 @@ def _build_ptb_application(token: str) -> Application:
     app = Application.builder().token(token).updater(None).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("list", list_command))
     app.add_handler(CommandHandler("search", search_command))
-    app.add_handler(CommandHandler("stop", stop_command))
+    app.add_handler(CommandHandler("untrack", untrack_command))
+    app.add_handler(CommandHandler("list", list_command))
     app.add_handler(CommandHandler("feedback", feedback_command))
+    app.add_handler(CommandHandler("stop", stop_command))
+    app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("stats", stats_command))
 
     app.add_handler(track_conv_handler)
-    app.add_handler(untrack_conv_handler)
     app.add_handler(broadcast_conv_handler)
 
-    app.add_handler(stop_callback_handler)
     app.add_handler(untrack_callback_handler)
+    app.add_handler(stop_callback_handler)
     app.add_handler(search_callback_handler)
 
     app.add_error_handler(error_handler)

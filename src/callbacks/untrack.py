@@ -3,14 +3,7 @@ from typing import Tuple
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
-from telegram.ext import (
-    CallbackQueryHandler,
-    CommandHandler,
-    ContextTypes,
-    ConversationHandler,
-    MessageHandler,
-    filters,
-)
+from telegram.ext import CallbackQueryHandler, ContextTypes
 
 from database import db
 from github import get_github_client
@@ -53,7 +46,7 @@ async def _try_delete_webhook(owner: str, name: str) -> None:
     logger.info("Webhook removed for %s/%s", owner, name)
 
 
-async def untrack_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
+async def untrack_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     repositories = db.get_user_repositories(user_id)
 
@@ -61,7 +54,7 @@ async def untrack_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text(
             "📋 You're not tracking any repositories yet.\n\nUse /track to add some!"
         )
-        return ConversationHandler.END
+        return
 
     keyboard = [
         [
@@ -81,19 +74,18 @@ async def untrack_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode=ParseMode.MARKDOWN,
     )
-    return SELECT_REPO
 
 
-async def handle_untrack_callback(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
+async def handle_untrack_callback(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
 
     if not query.data.startswith(_CB_PREFIX):
-        return ConversationHandler.END
+        return
 
     if query.data == "untrack|cancel":
         await query.edit_message_text("Untracking cancelled.")
-        return ConversationHandler.END
+        return
 
     owner, name = _parse_untrack_callback(query.data)
     user_id = update.effective_user.id
@@ -110,24 +102,6 @@ async def handle_untrack_callback(update: Update, _: ContextTypes.DEFAULT_TYPE) 
         await query.edit_message_text(
             "❌ Could not remove that repository. It may have already been removed."
         )
-
-    return ConversationHandler.END
-
-
-async def cancel_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("❌ Untrack cancelled.")
-    return ConversationHandler.END
-
-
-untrack_conv_handler = ConversationHandler(
-    entry_points=[CommandHandler("untrack", untrack_command)],
-    states={
-        SELECT_REPO: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, lambda u, c: SELECT_REPO)
-        ]
-    },
-    fallbacks=[CommandHandler("cancel", cancel_command)],
-)
 
 untrack_callback_handler = CallbackQueryHandler(
     handle_untrack_callback, pattern=r"^untrack\|"
