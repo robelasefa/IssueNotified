@@ -35,7 +35,7 @@ class AIClient:
         if not self.api_key or not self.session:
             return None
 
-        # API key is passed as a query parameter per Google's REST convention — not a Bearer header.
+        # API key is passed as a query parameter per Google's REST convention, not a Bearer header
         url = f"{GEMINI_API_URL}?key={self.api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
@@ -51,9 +51,7 @@ class AIClient:
                     if response.status == 200:
                         data = await response.json()
                         try:
-                            return data["candidates"][0]["content"]["parts"][0][
-                                "text"
-                            ].strip()
+                            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
                         except (KeyError, IndexError):
                             logger.warning(
                                 "Gemini response missing expected candidates (safety block?): %s",

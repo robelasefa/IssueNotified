@@ -26,7 +26,7 @@ WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 if not WEBHOOK_SECRET:
     if os.getenv("WEBSITE_INSTANCE_ID"):
         raise RuntimeError("WEBHOOK_SECRET is required in production.")
-    WEBHOOK_SECRET = "dev_default_secret_please_change"
+    WEBHOOK_SECRET = "dev_default_secret (please change)"
 
 GITHUB_WEBHOOK_PATH = "/github/webhook"
 PORT = int(os.getenv("PORT", "8443"))
