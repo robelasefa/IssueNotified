@@ -1,7 +1,5 @@
 import asyncio
 import hashlib
-import hmac
-import json
 import logging
 import os
 import sys
@@ -40,13 +38,11 @@ from config import (
     BOT_TOKEN,
     DEBUG,
     DEV_BOT_TOKEN,
-    GITHUB_WEBHOOK_PATH,
     WEBHOOK_BASE_URL,
     WEBHOOK_SECRET,
 )
 from error import error_handler
 from github import initialize_github_client
-from notifier import process_github_webhook_event
 from poller import poll_repositories
 
 logger = logging.getLogger(__name__)
@@ -65,12 +61,8 @@ def _get_token() -> str:
     return token
 
 
-def _build_ptb_application(token: str) -> Application:
-    """Build a PTB Application wired to FastAPI.
-
-    ``updater=None`` disables the built-in polling loop; updates arrive
-    exclusively from the FastAPI POST /telegram handler.
-    """
+def _build_ptb_app(token: str) -> Application:
+    """PTB Application wired to FastAP."""
     app = Application.builder().token(token).updater(None).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -123,26 +115,17 @@ async def _set_bot_commands(bot: Bot) -> None:
             logger.error("Error setting admin commands: %s", e)
 
 
-def generate_telegram_secret(token: str) -> str:
+def _generate_telegram_secret(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
-
-
-def verify_github_signature(payload_body: bytes, signature_header: str | None) -> bool:
-    if not signature_header or not WEBHOOK_SECRET:
-        return False
-    expected = hmac.new(
-        WEBHOOK_SECRET.encode(), payload_body, hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(f"sha256={expected}", signature_header)
 
 
 @asynccontextmanager
 async def lifespan(fastapi_app: FastAPI):
     token = _get_token()
-    ptb_app = _build_ptb_application(token)
+    ptb_app = _build_ptb_app(token)
 
     fastapi_app.state.ptb_app = ptb_app
-    fastapi_app.state.telegram_secret = generate_telegram_secret(token)
+    fastapi_app.state.telegram_secret = _generate_telegram_secret(token)
 
     github_token = os.getenv("GITHUB_TOKEN")
     if github_token:
@@ -166,96 +149,62 @@ async def lifespan(fastapi_app: FastAPI):
     if WEBHOOK_BASE_URL:
         webhook_url = f"{WEBHOOK_BASE_URL}/telegram"
         await ptb_app.bot.set_webhook(
-            url=webhook_url,
-            secret_token=fastapi_app.state.telegram_secret,
+            url=webhook_url, secret_token=fastapi_app.state.telegram_secret
         )
         logger.info("Telegram webhook set: %s", webhook_url)
     else:
         logger.warning("WEBHOOK_BASE_URL not set — Telegram webhook not registered.")
 
-    logger.info("IssueNotified webhook server started.")
+    logger.info("IssueNotified started.")
     yield
 
     if WEBHOOK_BASE_URL:
         try:
             await ptb_app.bot.delete_webhook()
-            logger.info("Telegram webhook deleted.")
         except Exception as e:
             logger.warning("Error deleting Telegram webhook: %s", e)
 
     await ptb_app.stop()
     await ptb_app.shutdown()
     await ai_client.stop()
-    logger.info("IssueNotified webhook server stopped.")
+    logger.info("IssueNotified stopped.")
 
 
 app = FastAPI(title="IssueNotified", lifespan=lifespan)
 
 
 @app.middleware("http")
-async def _rate_limit_middleware(request: Request, call_next):
-    if request.url.path in ("/telegram", GITHUB_WEBHOOK_PATH):
-        client_ip = request.client.host if request.client else "unknown"
+async def _rate_limit(request: Request, call_next):
+    if request.url.path == "/telegram":
+        ip = request.client.host if request.client else "unknown"
         now = time.time()
-        history = _ip_request_history[client_ip]
-
+        history = _ip_request_history[ip]
         while history and history[0] < now - _RATE_LIMIT_WINDOW:
             history.popleft()
-
         if len(history) >= _RATE_LIMIT_MAX_REQUESTS:
-            logger.warning("Rate limit exceeded for IP: %s", client_ip)
-            return Response(
-                content=json.dumps({"detail": "Rate limit exceeded. Try again later."}),
-                status_code=429,
-                media_type="application/json",
-            )
-
+            logger.warning("Rate limit exceeded for IP: %s", ip)
+            return Response(status_code=429, content="Rate limit exceeded.")
         history.append(now)
-
     return await call_next(request)
 
 
 @app.post("/telegram")
 async def telegram_webhook(request: Request):
-    """Receive updates pushed by the Telegram Bot API."""
-    secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-    if secret != request.app.state.telegram_secret:
+    if (
+        request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+        != request.app.state.telegram_secret
+    ):
         raise HTTPException(status_code=403, detail="Invalid secret token")
 
     data = await request.json()
     update = Update.de_json(data, request.app.state.ptb_app.bot)
-
     try:
         await asyncio.wait_for(
             request.app.state.ptb_app.process_update(update), timeout=20.0
         )
     except asyncio.TimeoutError:
-        logger.error("Timeout processing Telegram update")
+        logger.error("Timeout processing Telegram update %s", data.get("update_id"))
         return Response(status_code=504)
-
-    return Response(status_code=200)
-
-
-@app.post(GITHUB_WEBHOOK_PATH)
-async def github_webhook(request: Request):
-    """Receive GitHub webhook events for tracked issues."""
-    body = await request.body()
-    signature = request.headers.get("X-Hub-Signature-256")
-
-    if not verify_github_signature(body, signature):
-        raise HTTPException(status_code=403, detail="Invalid signature")
-
-    event_type = request.headers.get("X-GitHub-Event", "")
-
-    if event_type == "ping":
-        return {"status": "pong"}
-
-    if event_type != "issues":
-        return Response(status_code=200)
-
-    payload = json.loads(body)
-    bot = cast(Bot, request.app.state.ptb_app.bot)
-    await process_github_webhook_event(payload, bot)
     return Response(status_code=200)
 
 

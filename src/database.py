@@ -13,8 +13,8 @@ class DatabaseManager:
         if db_path:
             self.db_path = db_path
         else:
-            config.DATA_DIR.mkdir(exist_ok=True)
             self.db_path = config.DATA_DIR / "issuenotified.db"
+            config.DATA_DIR.mkdir(exist_ok=True)
 
         self._lock = threading.RLock()
         self._init_schema()
@@ -59,13 +59,6 @@ class DatabaseManager:
                     title         TEXT,
                     url           TEXT,
                     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY(repository_id) REFERENCES repositories(id)
-                );
-                CREATE TABLE IF NOT EXISTS webhooks (
-                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-                    repository_id  INTEGER NOT NULL UNIQUE,
-                    github_hook_id INTEGER NOT NULL,
-                    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(repository_id) REFERENCES repositories(id)
                 );
             """)
@@ -189,7 +182,6 @@ class DatabaseManager:
         with self._lock:
             try:
                 with self._connect() as conn:
-                    # Ensure user row exists (e.g. when tracking via search without prior /start)
                     conn.execute(
                         "INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,)
                     )
@@ -358,47 +350,6 @@ class DatabaseManager:
             return set()
 
     # ------------------------------------------------------------------
-    # Webhooks
-    # ------------------------------------------------------------------
-
-    def add_webhook(self, repository_id: int, github_hook_id: int) -> bool:
-        with self._lock:
-            try:
-                with self._connect() as conn:
-                    conn.execute(
-                        "INSERT OR REPLACE INTO webhooks (repository_id, github_hook_id) VALUES (?, ?)",
-                        (repository_id, github_hook_id),
-                    )
-                    return True
-            except sqlite3.Error as e:
-                logger.error("Error adding webhook for repo %s: %s", repository_id, e)
-                return False
-
-    def get_webhook(self, repository_id: int) -> Optional[int]:
-        try:
-            with self._connect() as conn:
-                row = conn.execute(
-                    "SELECT github_hook_id FROM webhooks WHERE repository_id = ?",
-                    (repository_id,),
-                ).fetchone()
-                return row[0] if row else None
-        except sqlite3.Error as e:
-            logger.error("Error fetching webhook for repo %s: %s", repository_id, e)
-            return None
-
-    def remove_webhook(self, repository_id: int) -> bool:
-        with self._lock:
-            try:
-                with self._connect() as conn:
-                    conn.execute(
-                        "DELETE FROM webhooks WHERE repository_id = ?", (repository_id,)
-                    )
-                    return True
-            except sqlite3.Error as e:
-                logger.error("Error removing webhook for repo %s: %s", repository_id, e)
-                return False
-
-    # ------------------------------------------------------------------
     # Admin / stats
     # ------------------------------------------------------------------
 
@@ -452,10 +403,6 @@ class DatabaseManager:
                         (repository_id,),
                     ).fetchone()[0]
                     if count == 0:
-                        conn.execute(
-                            "DELETE FROM webhooks WHERE repository_id = ?",
-                            (repository_id,),
-                        )
                         conn.execute(
                             "DELETE FROM tracked_issues WHERE repository_id = ?",
                             (repository_id,),

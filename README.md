@@ -1,6 +1,6 @@
 # IssueNotified Bot
 
-> Real-time Telegram notifications for GitHub issues — the moment they're opened, closed, or reopened.
+> Telegram notifications for GitHub issues — the moment they're opened, closed, or reopened. Works with any public repository.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
@@ -12,59 +12,52 @@
 
 ## Features
 
-- 🔔 **Universal tracking** — works with any public GitHub repository, with or without admin access
-- ⚡ **Hybrid delivery** — webhook push for repos you own, automatic polling fallback for everything else
+- 🔔 **Universal tracking** — works with any public GitHub repository, no admin access required
 - ✨ **AI summaries** — every notification includes a 1-2 sentence Gemini-powered summary of the issue
 - 🔁 **Full issue lifecycle** — alerts for `opened`, `closed`, and `reopened` events
 - 🏷️ **Keyword filtering** — subscribe only to issues matching specific terms in title, body, or labels
 - 🔍 **Repository search** — find and track by name or `owner/repo` with inline one-tap tracking
 - 🗂️ **Easy management** — list and untrack repositories via commands or inline buttons on every notification
 - 👑 **Admin tools** — AI-polished broadcast messages and system stats
-- 🛡️ **HMAC-SHA256 verification** — all GitHub webhook payloads are cryptographically validated
 
 ---
 
 ## Architecture
 
-IssueNotified runs as a single **FastAPI** + **python-telegram-bot** process using a hybrid notification architecture. PTB's built-in polling is disabled (`updater=None`); all Telegram updates arrive via webhooks managed in the FastAPI `lifespan` context.
+IssueNotified runs as a single **FastAPI** + **python-telegram-bot** process. All Telegram updates arrive via webhook managed in the FastAPI `lifespan` context. GitHub issue tracking is done exclusively via polling.
 
 ```
-                ┌──────────────────────────────────────────────┐
-  Telegram ───▶ │  POST /telegram                              │
-                │  Verifies X-Telegram-Bot-Api-Secret-Token    │
-                │  → PTB Application.process_update()          │
-                │                                              │
-  GitHub  ───▶  │  POST /github/webhook        (push path)     │
-                │  Verifies X-Hub-Signature-256 (HMAC-SHA256)  │
-                │  → process_github_webhook_event()            │
-                │    ├─ Deduplicate via issue_id + action      │
-                │    ├─ AI summary (Gemini)                    │
-                │    └─ Fan out to all subscribers             │
-                │                                              │
-  JobQueue ───▶ │  poll_repositories()         (poll path)     │
-                │  Runs every 5 min via PTB JobQueue           │
-                │  Skips repos with active webhooks            │
-                │  → Same dedup, AI, and fan-out pipeline      │
-                │                                              │
-  Monitoring ─▶ │  GET /health                                 │
-                └──────────────────────────────────────────────┘
+                ┌─────────────────────────────────────────────┐
+  Telegram ───▶ │  POST /telegram                             │
+                │  Verifies X-Telegram-Bot-Api-Secret-Token   │
+                │  → PTB Application.process_update()         │
+                │                                             │
+  JobQueue ───▶ │  poll_repositories()                        │
+                │  Runs every 5 min via PTB JobQueue          │
+                │  → Fetches GitHub Events API per repo       │
+                │    ├─ Deduplicate via tracked_issues DB     │
+                │    ├─ AI summary (Gemini)                   │
+                │    └─ Fan out to all subscribers            │
+                │                                             │
+  Monitoring ─▶ │  GET /health                                │
+                └─────────────────────────────────────────────┘
 ```
 
-### Hybrid Polling
+### Polling Engine
 
-When a user tracks a repository they have admin access to, the bot installs a GitHub webhook automatically — notifications arrive instantly via push. For any other repository (public repos the user doesn't own), the bot falls back to polling the GitHub Events API every 5 minutes. The user is informed which mode is active at tracking time; both paths share the same deduplication, AI summary, and notification pipeline.
+Every 5 minutes the PTB `JobQueue` fires `poll_repositories`, which fetches the latest issue events for every tracked repository from the GitHub Events API. New events are deduplicated, enriched with an AI summary, and dispatched to all subscribers who match the keyword filter for that repo.
 
 ### Deduplication
 
-Events are keyed as `issue_id + action` in the `tracked_issues` table. This means an issue being opened and later closed both trigger notifications correctly, while duplicate webhook deliveries and poll overlaps are silently ignored. Records are written before fan-out so a mid-send crash cannot re-notify on restart.
+Issue events are stored in the `tracked_issues` table before notifications are dispatched. This means a mid-send crash cannot re-notify on restart, and duplicate poll cycles are silently ignored.
 
 ### AI Summarizer
 
-`src/ai.py` holds a singleton `AIClient` that calls the Gemini REST API directly over `aiohttp`. It includes 3-attempt exponential backoff on `429`/`503` responses and a 15s timeout. If the key is absent or all attempts fail, notifications fall back to a 280-character description excerpt with no user-visible error.
+`src/ai.py` holds a singleton `AIClient` that calls the Gemini REST API directly over `aiohttp`. It includes automatic retry with exponential backoff and a 15s timeout. If the key is absent or all retries fail, notifications fall back to a 280-character description excerpt with no user-visible error.
 
 ### Rate Limiting
 
-A sliding-window limiter in `src/ratelimit.py` governs both the GitHub API client (5,000 req/hour) and the webhook endpoints (60 req/min per IP).
+A sliding-window limiter in `src/ratelimit.py` governs GitHub API calls (5,000 req/hour) and the Telegram webhook endpoint (60 req/min per IP).
 
 ---
 
@@ -74,11 +67,11 @@ A sliding-window limiter in `src/ratelimit.py` governs both the GitHub API clien
 IssueNotified/
 ├── src/
 │   ├── main.py           # Entry point — configures logging, starts uvicorn
-│   ├── webhook.py        # FastAPI app: lifespan, middleware, route handlers
+│   ├── webhook.py        # FastAPI app: lifespan, middleware, /telegram route
 │   ├── config.py         # All env-var config, validated at import time
-│   ├── notifier.py       # Webhook event processor + shared notification engine
-│   ├── poller.py         # Background JobQueue polling for non-webhook repos
-│   ├── github.py         # Async GitHub API client, webhook CRUD, payload parser
+│   ├── poller.py         # Background polling engine (PTB JobQueue)
+│   ├── notifier.py       # Shared notification helpers (format, filter, markup)
+│   ├── github.py         # Async GitHub API client and issue event parser
 │   ├── ai.py             # Gemini AI client with retry/backoff
 │   ├── database.py       # SQLite layer (WAL mode, FK enforcement, RLock)
 │   ├── ratelimit.py      # Async sliding-window rate limiter
@@ -87,13 +80,13 @@ IssueNotified/
 │   └── callbacks/        # One module per bot command
 │       ├── start.py      # /start
 │       ├── help.py       # /help
-│       ├── track.py      # /track  (conversation + auto webhook install)
-│       ├── untrack.py    # /untrack (inline buttons + webhook cleanup)
+│       ├── track.py      # /track (conversation handler)
+│       ├── untrack.py    # /untrack (inline buttons)
 │       ├── list.py       # /list
 │       ├── search.py     # /search + inline one-tap tracking
-│       ├── stop.py       # /stop  (account deletion)
+│       ├── stop.py       # /stop (account deletion)
 │       ├── feedback.py   # /feedback
-│       ├── stats.py      # /stats  (admin only)
+│       ├── stats.py      # /stats (admin only)
 │       └── broadcast.py  # /broadcast (admin, AI-polished)
 ├── tests/                # pytest suite — 41 tests
 ├── data/                 # SQLite database (auto-created, gitignored)
@@ -111,7 +104,7 @@ IssueNotified/
 
 - Python 3.12+
 - Telegram bot token from [@BotFather](https://t.me/BotFather)
-- GitHub Personal Access Token — classic PAT, `repo` scope required; add `admin:repo_hook` to auto-install webhooks on repos you own
+- GitHub Personal Access Token — classic PAT with `repo` scope
 - Google Gemini API key — optional, free tier at [Google AI Studio](https://aistudio.google.com/app/api-keys)
 - A publicly reachable HTTPS URL (ngrok for local dev, Azure / Heroku for production)
 
@@ -135,11 +128,11 @@ cp .env.example .env
 |---|---|---|
 | `BOT_TOKEN` | ✅ | Production bot token from @BotFather |
 | `DEV_BOT_TOKEN` | — | Separate token used when `DEBUG=true` |
-| `GITHUB_TOKEN` | ✅ | GitHub PAT (`repo` scope minimum; `admin:repo_hook` for auto-webhook) |
+| `GITHUB_TOKEN` | ✅ | GitHub PAT with `repo` scope |
 | `GEMINI_API_KEY` | — | Enables AI issue summaries |
 | `ADMIN_USER_ID` | — | Your Telegram user ID — unlocks `/stats` and `/broadcast` |
 | `WEBHOOK_BASE_URL` | ✅ | Public HTTPS root URL, no trailing slash |
-| `WEBHOOK_SECRET` | ✅ prod | Shared secret for GitHub webhook HMAC validation |
+| `WEBHOOK_SECRET` | ✅ prod | Secret token for verifying Telegram webhook requests |
 | `PORT` | — | Server port (default: `8443`; Azure sets this automatically) |
 | `DEBUG` | — | `true` → use `DEV_BOT_TOKEN` + verbose logging |
 | `MAX_REPOS_PER_USER` | — | Per-user repository cap (default: `5`) |
@@ -150,7 +143,7 @@ cp .env.example .env
 ### 3. Run locally
 
 ```bash
-# Expose a public HTTPS URL for webhooks
+# Expose a public HTTPS URL for the Telegram webhook
 ngrok http 8443
 # Copy the https://... URL into WEBHOOK_BASE_URL in .env
 
@@ -198,12 +191,7 @@ az webapp config appsettings set --name <app> --resource-group <rg> \
 
 ### Universal Repository Tracking
 
-Any public GitHub repository can be tracked regardless of ownership:
-
-- **You own the repo** → bot auto-installs a webhook, notifications are instant
-- **You don't own the repo** → bot falls back to polling every 5 minutes automatically
-
-No manual configuration needed in either case.
+Any public GitHub repository can be tracked — no ownership or admin access required. Simply send the `owner/repo` name and the bot handles the rest.
 
 ### Keyword Filtering
 
@@ -254,10 +242,9 @@ source venv/bin/activate && pytest
 |---|---|
 | Bot not responding | Confirm the correct token is active (`DEBUG=true` uses `DEV_BOT_TOKEN`) |
 | No AI summary | Check `GEMINI_API_KEY` is set; inspect logs for `Gemini API error` |
-| GitHub API 403 | Token may be missing `admin:repo_hook` scope or has expired |
-| Notifications not arriving (webhook) | Verify `WEBHOOK_BASE_URL` is publicly reachable and the GitHub webhook shows green in repo settings |
-| Notifications not arriving (polling) | Check logs for GitHub API errors; confirm the repo is public |
-| Webhook creation fails | Normal for repos you don't own — polling is used automatically |
+| GitHub API 403 | Token may be expired or missing `repo` scope |
+| Notifications not arriving | Check logs for GitHub API errors; confirm the repo is public and `GITHUB_TOKEN` is valid |
+| No notifications after tracking | The poller runs every 5 minutes — wait for the next cycle and check logs |
 | Database errors on Azure | Confirm `/home/data/` is writable; `WEBSITE_INSTANCE_ID` must be set by the platform |
 
 ---

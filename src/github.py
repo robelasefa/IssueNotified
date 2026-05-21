@@ -23,7 +23,7 @@ class GitHubClient:
         self, endpoint: str, params: Dict = None, *, full_url: str = None
     ) -> Optional[Any]:
         await self.rate_limiter.wait_if_needed("github")
-        url = full_url or f"{self.base_url}/{endpoint}"
+        url = full_url if full_url else f"{self.base_url}/{endpoint}"
         try:
             async with aiohttp.ClientSession(headers=self.headers) as session:
                 async with session.get(url, params=params) as response:
@@ -33,6 +33,8 @@ class GitHubClient:
                         logger.warning("GitHub 404: %s", url)
                     elif response.status == 403:
                         logger.error("GitHub 403 (rate limit or forbidden): %s", url)
+                    elif response.status == 422:
+                        logger.warning("GitHub 422 (unprocessable): %s", url)
                     else:
                         logger.error("GitHub %s: %s", response.status, url)
                     return None
@@ -46,7 +48,6 @@ class GitHubClient:
     async def search_repositories(
         self, query: str, per_page: int = 10
     ) -> List[Dict[str, Any]]:
-        # Scope to owner when caller passes owner/repo
         if "/" in query:
             owner_q, name_q = [p.strip() for p in query.split("/", 1)]
             q = f"{name_q} user:{owner_q}"
@@ -83,78 +84,40 @@ class GitHubClient:
         return data if isinstance(data, list) else []
 
     async def get_new_issues(
-        self, owner: str, repo: str, tracked_ids: set
+        self, owner: str, repo: str, tracked_issue_ids: set
     ) -> List[Dict]:
         events = await self.get_repository_issues_events(owner, repo)
-        result = []
+        new_issues = []
         for event in events:
             issue_id = str(event.get("id", ""))
-            if issue_id and issue_id not in tracked_ids:
+            if issue_id and issue_id not in tracked_issue_ids:
                 info = _parse_issue_event(event)
                 if info:
-                    result.append(info)
-        return result
+                    new_issues.append(info)
+        return new_issues
 
-    async def create_webhook(
-        self, owner: str, repo: str, webhook_url: str, secret: str
-    ) -> Optional[int]:
-        await self.rate_limiter.wait_if_needed("github")
-        payload = {
-            "name": "web",
-            "active": True,
-            "events": ["issues"],
-            "config": {
-                "url": webhook_url,
-                "content_type": "json",
-                "secret": secret,
-                "insecure_ssl": "0",
-            },
-        }
-        try:
-            async with aiohttp.ClientSession(headers=self.headers) as session:
-                async with session.post(
-                    f"{self.base_url}/repos/{owner}/{repo}/hooks", json=payload
-                ) as response:
-                    if response.status == 201:
-                        data = await response.json()
-                        logger.info("Webhook created for %s/%s", owner, repo)
-                        return data.get("id")
-                    body = await response.text()
-                    logger.warning(
-                        "Failed to create webhook for %s/%s: %s — %s",
-                        owner,
-                        repo,
-                        response.status,
-                        body,
-                    )
-                    return None
-        except aiohttp.ClientError as e:
-            logger.error("Network error creating webhook for %s/%s: %s", owner, repo, e)
-            return None
 
-    async def delete_webhook(self, owner: str, repo: str, hook_id: int) -> bool:
-        await self.rate_limiter.wait_if_needed("github")
-        try:
-            async with aiohttp.ClientSession(headers=self.headers) as session:
-                async with session.delete(
-                    f"{self.base_url}/repos/{owner}/{repo}/hooks/{hook_id}"
-                ) as response:
-                    if response.status == 204:
-                        logger.info(
-                            "Webhook %s deleted for %s/%s", hook_id, owner, repo
-                        )
-                        return True
-                    logger.warning(
-                        "Failed to delete webhook %s for %s/%s: %s",
-                        hook_id,
-                        owner,
-                        repo,
-                        response.status,
-                    )
-                    return False
-        except aiohttp.ClientError as e:
-            logger.error("Network error deleting webhook for %s/%s: %s", owner, repo, e)
-            return False
+def _parse_issue_event(event: Dict) -> Dict[str, Any]:
+    if not event or "issue" not in event:
+        return {}
+    if event.get("event") not in ("open", "closed", "reopened"):
+        return {}
+
+    issue = event["issue"]
+    assignees = issue.get("assignees", [])
+
+    return {
+        "id": str(event.get("id", "")),
+        "title": issue.get("title", "No Title"),
+        "url": issue.get("html_url", ""),
+        "event_type": event["event"],
+        "description": issue.get("body") or "",
+        "tags": [label["name"] for label in issue.get("labels", [])],
+        "assignee": assignees[0]["login"] if assignees else None,
+        "release_time_message": _format_time_message(event.get("created_at", "")),
+        "state": issue.get("state", "open"),
+        "number": issue.get("number"),
+    }
 
 
 def _format_time_message(created_at: str) -> str:
@@ -179,52 +142,6 @@ def _format_time_message(created_at: str) -> str:
         return f"🕐 {dt.strftime('%Y-%m-%d %I:%M %p UTC')} ({relative})\n"
     except ValueError:
         return "🕐 Time released: Unknown\n"
-
-
-def _parse_issue_event(event: Dict) -> Dict[str, Any]:
-    """Normalise a polling issue-event payload into the shared notification shape."""
-    if not event or "issue" not in event:
-        return {}
-    if event.get("event") not in ("opened", "closed"):
-        return {}
-
-    issue = event["issue"]
-    assignees = issue.get("assignees", [])
-    return {
-        "id": str(event.get("id", "")),
-        "title": issue.get("title", "No Title"),
-        "url": issue.get("html_url", ""),
-        "event_type": event["event"],
-        "description": issue.get("body") or "",
-        "tags": [l["name"] for l in issue.get("labels", [])],
-        "assignee": assignees[0]["login"] if assignees else None,
-        "release_time_message": _format_time_message(event.get("created_at", "")),
-        "state": issue.get("state", "open"),
-        "number": issue.get("number"),
-    }
-
-
-def format_webhook_issue(payload: Dict) -> Dict[str, Any]:
-    """Convert a GitHub webhook ``issues`` payload into the shared notification shape."""
-    action = payload.get("action", "opened")
-    issue = payload.get("issue", {})
-    assignees = issue.get("assignees", [])
-
-    # reopened is treated as opened for display purposes
-    event_type = "closed" if action == "closed" else "opened"
-
-    return {
-        "id": str(issue.get("id", "")),
-        "title": issue.get("title", "No Title"),
-        "url": issue.get("html_url", ""),
-        "event_type": event_type,
-        "description": issue.get("body") or "",
-        "tags": [l["name"] for l in issue.get("labels", [])],
-        "assignee": assignees[0]["login"] if assignees else None,
-        "release_time_message": _format_time_message(issue.get("created_at", "")),
-        "state": issue.get("state", "open"),
-        "number": issue.get("number"),
-    }
 
 
 github_client: Optional[GitHubClient] = None

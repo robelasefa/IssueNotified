@@ -26,7 +26,7 @@ async def track_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
     if db.count_user_repositories(user_id) >= config.MAX_REPOS_PER_USER:
         await update.message.reply_text(
             f"⚠️ You are already tracking the maximum limit of {config.MAX_REPOS_PER_USER} repositories.\n\n"
-            "Please use /untrack to stop tracking some repositories first!",
+            "Please use /untrack to stop tracking some repos first!",
             parse_mode=ParseMode.MARKDOWN,
         )
         return ConversationHandler.END
@@ -39,32 +39,6 @@ async def track_command(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
         parse_mode=ParseMode.MARKDOWN,
     )
     return TRACK_REPO
-
-
-async def _try_create_webhook(owner: str, name: str, repo_id: int) -> bool:
-    github_client = get_github_client()
-    if not github_client or not config.WEBHOOK_BASE_URL:
-        return False
-
-    if db.get_webhook(repo_id):
-        return True
-
-    webhook_url = f"{config.WEBHOOK_BASE_URL}{config.GITHUB_WEBHOOK_PATH}"
-    hook_id = await github_client.create_webhook(
-        owner, name, webhook_url, config.WEBHOOK_SECRET
-    )
-
-    if hook_id:
-        db.add_webhook(repo_id, hook_id)
-        logger.info("Webhook installed for %s/%s (hook_id=%s)", owner, name, hook_id)
-        return True
-    else:
-        logger.info(
-            "Could not create webhook for %s/%s — manual intervention required",
-            owner,
-            name,
-        )
-        return False
 
 
 async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE) -> int:
@@ -100,10 +74,10 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE) -> in
         await update.message.reply_text(
             f"🔍 *Repository not found:* `{owner}/{repo}`\n\n"
             "This could be because:\n"
-            "1. The repository is **private** and the bot doesn't have access.\n"
-            "2. The name is misspelled.\n"
-            "3. The repository does not exist.\n\n"
-            "Please check the name and try again, or type /cancel.",
+            "• The repository name is misspelled\n"
+            "• The repository is private\n"
+            "• The repository does not exist\n\n"
+            "Please check and try again, or type /cancel.",
             parse_mode=ParseMode.MARKDOWN,
         )
         return TRACK_REPO
@@ -120,40 +94,31 @@ async def handle_track_input(update: Update, _: ContextTypes.DEFAULT_TYPE) -> in
 
     repo_id = db.add_repository(canonical_owner, canonical_name)
     if not repo_id:
-        await update.message.reply_text("❌ Error: Could not register repository.")
+        await update.message.reply_text(
+            "❌ Error: Could not register repository. Please try again."
+        )
         return ConversationHandler.END
 
-    success = db.link_user_repository(user_id, repo_id, keywords)
-    if success:
-        logger.info(
-            "User %s started tracking %s/%s (keywords: %s)",
-            user_id,
-            canonical_owner,
-            canonical_name,
-            keywords,
-        )
-        msg = f"✅ Now tracking `{canonical_owner}/{canonical_name}`!"
-        if keywords:
-            msg += f"\n\n🔍 *Filter:* `{keywords}`"
-        msg += "\n\nYou'll be notified when new issues are opened, reopened or closed."
-
-        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
-
-        webhook_created = await _try_create_webhook(
-            canonical_owner, canonical_name, repo_id
-        )
-        if not webhook_created:
-            await update.message.reply_text(
-                "ℹ️ *Tracking via Polling*\n\n"
-                f"I couldn't automatically install a webhook for `{canonical_owner}/{canonical_name}` (usually because you don't have admin rights to it).\n\n"
-                "No worries! I will automatically track this repository by polling GitHub every 5 minutes for new updates.",
-                parse_mode=ParseMode.MARKDOWN,
-            )
-    else:
+    if not db.link_user_repository(user_id, repo_id, keywords):
         await update.message.reply_text(
             "❌ Failed to save the repository. Please try again."
         )
+        return ConversationHandler.END
 
+    logger.info(
+        "User %s started tracking %s/%s (keywords: %s)",
+        user_id,
+        canonical_owner,
+        canonical_name,
+        keywords,
+    )
+
+    msg = f"✅ Now tracking `{canonical_owner}/{canonical_name}`!"
+    if keywords:
+        msg += f"\n\n🔍 *Filter:* `{keywords}`"
+    msg += "\n\nYou'll be notified when issues are opened, closed, or reopened."
+
+    await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
     return ConversationHandler.END
 
 
