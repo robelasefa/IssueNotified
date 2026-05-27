@@ -5,10 +5,48 @@ from telegram.ext import ContextTypes
 
 from ai import ai_client
 from database import db
-from github import get_github_client
-from notifier import _build_reply_markup, _format_notification, _matches_keywords
+from github import build_notification_payload, get_github_client
+from notifier import build_reply_markup, format_notification, matches_keywords
 
 logger = logging.getLogger(__name__)
+
+
+async def _enrich_with_summary(issue: dict) -> None:
+    try:
+        summary = await ai_client.summarize_issue(
+            title=issue.get("title", ""),
+            description=issue.get("description", ""),
+        )
+        if summary:
+            issue["ai_summary"] = summary
+    except Exception as e:
+        logger.error("AI summary failed for issue %s: %s", issue.get("id"), e)
+
+
+async def _notify_subscribers(context, subscribers, payload, owner, name) -> None:
+    message = format_notification(owner, name, payload)
+    reply_markup = build_reply_markup(owner, name, payload.get("url", ""))
+
+    for sub in subscribers:
+        if not matches_keywords(payload, sub["keywords"]):
+            continue
+        try:
+            await context.bot.send_message(
+                chat_id=sub["user_id"],
+                text=message,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=reply_markup,
+                disable_web_page_preview=True,
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to notify user %s for %s/%s#%s: %s",
+                sub["user_id"],
+                owner,
+                name,
+                payload.get("number"),
+                e,
+            )
 
 
 async def poll_repositories(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -21,60 +59,63 @@ async def poll_repositories(context: ContextTypes.DEFAULT_TYPE) -> None:
     if not repositories:
         return
 
-    logger.debug("Polling %d repositories for new issues.", len(repositories))
+    logger.debug("Polling %d repositories.", len(repositories))
 
     for repo in repositories:
         repo_id = repo["repo_id"]
         owner = repo["owner"]
         name = repo["name"]
         subscribers = repo["subscribers"]
+        last_checked_at = repo.get("last_checked_at")  # ISO 8601 string or None
 
-        tracked_ids = db.get_tracked_issue_ids_for_repo(repo_id)
-        new_events = await github_client.get_new_issues(owner, name, tracked_ids)
+        logger.debug("Polling %s/%s (since=%s)", owner, name, last_checked_at)
 
-        for issue_info in new_events:
-            issue_id = issue_info["id"]
+        current = await github_client.get_issues_snapshot(
+            owner, name, since=last_checked_at
+        )
 
-            # Persist before fan-out so a crash mid-send doesn't re-notify on restart
-            db.add_tracked_issue(
-                issue_id=issue_id,
-                repository_id=repo_id,
-                title=issue_info.get("title", ""),
-                url=issue_info.get("url", ""),
+        # `current` being empty is legitimate when no issues exist or none were
+        # updated since the last check — still update last_checked_at so the
+        # next poll uses the correct window. Do NOT skip with `continue` here;
+        # a silent skip would also hide 422 errors from malformed `since` values.
+        stored = db.get_tracked_issues_for_repo(repo_id)
+
+        for issue_id, issue in current.items():
+            current_state = issue["state"]  # 'open' or 'closed'
+            stored_state = stored.get(issue_id)
+
+            if stored_state is None:
+                # First time we've seen this issue → notify as opened
+                event_type = "opened"
+                db.add_tracked_issue(
+                    issue_id=issue_id,
+                    repository_id=repo_id,
+                    title=issue.get("title", ""),
+                    url=issue.get("url", ""),
+                    state=current_state,
+                )
+            elif stored_state == "open" and current_state == "closed":
+                event_type = "closed"
+                db.update_issue_state(issue_id, "closed")
+            elif stored_state == "closed" and current_state == "open":
+                event_type = "reopened"
+                db.update_issue_state(issue_id, "open")
+            else:
+                continue
+
+            payload = build_notification_payload(issue, event_type)
+            await _enrich_with_summary(payload)
+            await _notify_subscribers(context, subscribers, payload, owner, name)
+
+            logger.info(
+                "Notified: %s %s/%s#%s",
+                event_type,
+                owner,
+                name,
+                issue.get("number"),
             )
 
-            try:
-                summary = await ai_client.summarize_issue(
-                    title=issue_info.get("title", ""),
-                    description=issue_info.get("description", ""),
-                )
-                if summary:
-                    issue_info["ai_summary"] = summary
-            except Exception as e:
-                logger.error("AI summary failed for issue %s: %s", issue_id, e)
-
-            message = _format_notification(owner, name, issue_info)
-            reply_markup = _build_reply_markup(owner, name, issue_info.get("url", ""))
-
-            for sub in subscribers:
-                if not _matches_keywords(issue_info, sub["keywords"]):
-                    continue
-                try:
-                    await context.bot.send_message(
-                        chat_id=sub["user_id"],
-                        text=message,
-                        parse_mode=ParseMode.MARKDOWN,
-                        reply_markup=reply_markup,
-                        disable_web_page_preview=True,
-                    )
-                except Exception as e:
-                    logger.error(
-                        "Failed to notify user %s for %s/%s#%s: %s",
-                        sub["user_id"],
-                        owner,
-                        name,
-                        issue_id,
-                        e,
-                    )
-
+        # Update after every poll regardless of whether issues were found.
+        # This advances the `since` window so the next cycle only fetches
+        # issues updated after this moment.
         db.update_repository_last_checked(repo_id)

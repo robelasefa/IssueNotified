@@ -33,9 +33,9 @@ IssueNotified runs as a single **FastAPI** + **python-telegram-bot** process. Al
                 │  → PTB Application.process_update()         │
                 │                                             │
   JobQueue ───▶ │  poll_repositories()                        │
-                │  Runs every 5 min via PTB JobQueue          │
-                │  → Fetches GitHub Events API per repo       │
-                │    ├─ Deduplicate via tracked_issues DB     │
+                │  Runs periodically via PTB JobQueue         │
+                │  → GET /repos/{owner}/{repo}/issues         │
+                │    ├─ State diff against DB snapshot        │
                 │    ├─ AI summary (Gemini)                   │
                 │    └─ Fan out to all subscribers            │
                 │                                             │
@@ -45,11 +45,22 @@ IssueNotified runs as a single **FastAPI** + **python-telegram-bot** process. Al
 
 ### Polling Engine
 
-Every 5 minutes the PTB `JobQueue` fires `poll_repositories`, which fetches the latest issue events for every tracked repository from the GitHub Events API. New events are deduplicated, enriched with an AI summary, and dispatched to all subscribers who match the keyword filter for that repo.
+Periodically, the PTB `JobQueue` fires `poll_repositories`, which calls the GitHub `/issues?state=all` endpoint for every tracked repository. On the first poll for a newly tracked repo, all issues are fetched to build the initial state snapshot. On every subsequent poll, the `since` parameter is used to fetch only issues updated since the last check — making it efficient even for high-volume repositories.
 
-### Deduplication
+### State Diffing
 
-Issue events are stored in the `tracked_issues` table before notifications are dispatched. This means a mid-send crash cannot re-notify on restart, and duplicate poll cycles are silently ignored.
+Issue states are stored in the `tracked_issues` table (`open` or `closed`). On each poll the current GitHub state is compared against the stored state:
+
+| Stored | Current | Event fired |
+|--------|---------|-------------|
+| — | `open` | `opened` |
+| `open` | `closed` | `closed` |
+| `closed` | `open` | `reopened` |
+| same | same | *(skipped)* |
+
+State is written to the database **before** notifications are dispatched, so a mid-send crash cannot trigger duplicate notifications on the next cycle.
+
+> **Note:** If an issue is closed and reopened within the same poll window, only the current state (`open`) is visible to the poller. In this case neither the `closed` nor `reopened` notification fires — this is a fundamental limitation of state-based polling. Each state change must settle across a separate poll cycle to be detected independently.
 
 ### AI Summarizer
 
@@ -71,7 +82,7 @@ IssueNotified/
 │   ├── config.py         # All env-var config, validated at import time
 │   ├── poller.py         # Background polling engine (PTB JobQueue)
 │   ├── notifier.py       # Shared notification helpers (format, filter, markup)
-│   ├── github.py         # Async GitHub API client and issue event parser
+│   ├── github.py         # Async GitHub API client (/issues endpoint + parser)
 │   ├── ai.py             # Gemini AI client with retry/backoff
 │   ├── database.py       # SQLite layer (WAL mode, FK enforcement, RLock)
 │   ├── ratelimit.py      # Async sliding-window rate limiter
@@ -136,6 +147,7 @@ cp .env.example .env
 | `PORT` | — | Server port (default: `8443`; Azure sets this automatically) |
 | `DEBUG` | — | `true` → use `DEV_BOT_TOKEN` + verbose logging |
 | `MAX_REPOS_PER_USER` | — | Per-user repository cap (default: `5`) |
+| `GEMINI_MODEL` | — | Specific Gemini model to use (default: `gemini-3.1-flash-lite`) |
 
 > **Never commit `.env`.** It is already excluded by `.gitignore`.
 > See `SECURITY.md` for vulnerability reporting guidance.
@@ -244,7 +256,8 @@ source venv/bin/activate && pytest
 | No AI summary | Check `GEMINI_API_KEY` is set; inspect logs for `Gemini API error` |
 | GitHub API 403 | Token may be expired or missing `repo` scope |
 | Notifications not arriving | Check logs for GitHub API errors; confirm the repo is public and `GITHUB_TOKEN` is valid |
-| No notifications after tracking | The poller runs every 5 minutes — wait for the next cycle and check logs |
+| No notifications after tracking | The poller runs periodically — wait for the next cycle and check logs |
+| `reopened` not firing | Each state change needs a separate poll window — close the issue, wait for the closed notification, then reopen and wait again |
 | Database errors on Azure | Confirm `/home/data/` is writable; `WEBSITE_INSTANCE_ID` must be set by the platform |
 
 ---

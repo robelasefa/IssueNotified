@@ -79,50 +79,61 @@ class GitHubClient:
             for item in data["items"]
         ]
 
-    async def get_repository_issues_events(self, owner: str, repo: str) -> List[Dict]:
-        data = await self._get(f"repos/{owner}/{repo}/issues/events")
-        return data if isinstance(data, list) else []
+    async def get_issues(self, owner: str, repo: str, since: str = None) -> List[Dict]:
+        params: Dict[str, str] = {
+            "state": "all",
+            "sort": "updated",
+            "direction": "desc",
+            "per_page": "100",
+        }
+        if since:
+            params["since"] = since
 
-    async def get_new_issues(
-        self, owner: str, repo: str, tracked_issue_ids: set
-    ) -> List[Dict]:
-        events = await self.get_repository_issues_events(owner, repo)
-        new_issues = []
-        for event in events:
-            issue_id = str(event.get("id", ""))
-            if issue_id and issue_id not in tracked_issue_ids:
-                info = _parse_issue_event(event)
-                if info:
-                    new_issues.append(info)
-        return new_issues
+        data = await self._get(f"repos/{owner}/{repo}/issues", params=params)
+        if not isinstance(data, list):
+            return []
+
+        return [item for item in data if "pull_request" not in item]
+
+    async def get_issues_snapshot(
+        self, owner: str, repo: str, since: str = None
+    ) -> Dict[str, Dict]:
+        issues = await self.get_issues(owner, repo, since=since)
+        return {str(issue["id"]): _parse_issue(issue) for issue in issues}
 
 
-def _parse_issue_event(event: Dict) -> Dict[str, Any]:
-    if not event or "issue" not in event:
-        return {}
-    if event.get("event") not in ("open", "closed", "reopened"):
-        return {}
-
-    issue = event["issue"]
+def _parse_issue(issue: Dict) -> Dict[str, Any]:
     assignees = issue.get("assignees", [])
-
     return {
-        "id": str(event.get("id", "")),
+        "id": str(issue.get("id", "")),
+        "number": issue.get("number"),
         "title": issue.get("title", "No Title"),
         "url": issue.get("html_url", ""),
-        "event_type": event["event"],
+        "state": issue.get("state", "open"),  # 'open' or 'closed'
         "description": issue.get("body") or "",
         "tags": [label["name"] for label in issue.get("labels", [])],
         "assignee": assignees[0]["login"] if assignees else None,
-        "release_time_message": _format_time_message(event.get("created_at", "")),
-        "state": issue.get("state", "open"),
-        "number": issue.get("number"),
+        "created_at": issue.get("created_at", ""),
+        "updated_at": issue.get("updated_at", ""),
     }
 
 
-def _format_time_message(created_at: str) -> str:
+def build_notification_payload(issue: Dict, event_type: str) -> Dict[str, Any]:
+    timestamp = (
+        issue["created_at"]
+        if event_type in ("opened", "reopened")
+        else issue["updated_at"]
+    )
+    return {
+        **issue,
+        "event_type": event_type,
+        "release_time_message": _format_time_message(timestamp),
+    }
+
+
+def _format_time_message(timestamp: str) -> str:
     try:
-        dt = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ").replace(
+        dt = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ").replace(
             tzinfo=timezone.utc
         )
         secs = int((datetime.now(timezone.utc) - dt).total_seconds())
@@ -141,7 +152,7 @@ def _format_time_message(created_at: str) -> str:
 
         return f"🕐 {dt.strftime('%Y-%m-%d %I:%M %p UTC')} ({relative})\n"
     except ValueError:
-        return "🕐 Time released: Unknown\n"
+        return ""
 
 
 github_client: Optional[GitHubClient] = None

@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 
-from src.github import GitHubClient, _parse_issue_event
+from src.github import GitHubClient, _parse_issue, build_notification_payload
 
 
 @pytest.fixture
@@ -35,52 +35,53 @@ async def test_get_repository_info_not_found(client):
 
 
 @pytest.mark.asyncio
-async def test_get_new_issues_filtering(client):
-    events = [
-        {
-            "id": "1",
-            "event": "opened",
-            "issue": {"number": 1, "title": "New", "html_url": "url"},
-        },
-        {
-            "id": "2",
-            "event": "closed",
-            "issue": {"number": 2, "title": "Closed", "html_url": "url"},
-        },
-        {
-            "id": "3",
-            "event": "labeled",
-            "issue": {"number": 3, "title": "Ignored", "html_url": "url"},
-        },
+async def test_get_issues(client):
+    issues_data = [
+        {"id": 1, "number": 1, "title": "New Issue", "html_url": "url"},
+        {"id": 2, "number": 2, "title": "PR", "html_url": "url", "pull_request": {}},
     ]
     mock_response = AsyncMock(spec=aiohttp.ClientResponse)
     mock_response.status = 200
-    mock_response.json = AsyncMock(return_value=events)
+    mock_response.json = AsyncMock(return_value=issues_data)
     mock_get = MagicMock()
     mock_get.__aenter__.return_value = mock_response
     with patch("aiohttp.ClientSession.get", return_value=mock_get):
-        new_issues = await client.get_new_issues("owner", "repo", {"1"})
-        assert len(new_issues) == 1
-        assert new_issues[0]["id"] == "2"
-        assert new_issues[0]["event_type"] == "closed"
+        issues = await client.get_issues("owner", "repo")
+        # PR should be filtered out
+        assert len(issues) == 1
+        assert issues[0]["id"] == 1
 
 
-def test_parse_issue_event_mapping():
-    event = {
-        "id": "event_id",
-        "event": "opened",
-        "issue": {
-            "number": 101,
-            "title": "Bug Report",
-            "html_url": "http://github/issue/101",
-            "body": "Something is broken",
-            "labels": [{"name": "bug"}, {"name": "high"}],
-            "assignees": [{"login": "merti"}],
-        },
+def test_parse_issue():
+    raw_issue = {
+        "id": 101,
+        "number": 42,
+        "title": "Bug Report",
+        "html_url": "http://github/issue/42",
+        "body": "Something is broken",
+        "state": "open",
+        "labels": [{"name": "bug"}, {"name": "high"}],
+        "assignees": [{"login": "merti"}],
+        "created_at": "2026-05-20T10:00:00Z",
+        "updated_at": "2026-05-20T11:00:00Z",
     }
-    info = _parse_issue_event(event)
-    assert info["id"] == "event_id"
-    assert info["title"] == "Bug Report"
-    assert info["event_type"] == "opened"
-    assert info["tags"] == ["bug", "high"]
-    assert info["assignee"] == "merti"
+    parsed = _parse_issue(raw_issue)
+    assert parsed["id"] == "101"
+    assert parsed["number"] == 42
+    assert parsed["title"] == "Bug Report"
+    assert parsed["tags"] == ["bug", "high"]
+    assert parsed["assignee"] == "merti"
+    assert parsed["state"] == "open"
+
+
+def test_build_notification_payload():
+    parsed_issue = {
+        "id": "101",
+        "created_at": "2026-05-20T10:00:00Z",
+        "updated_at": "2026-05-20T11:00:00Z",
+    }
+
+    with patch("src.github._format_time_message", return_value="just now"):
+        payload = build_notification_payload(parsed_issue, "opened")
+        assert payload["event_type"] == "opened"
+        assert payload["release_time_message"] == "just now"

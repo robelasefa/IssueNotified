@@ -4,10 +4,9 @@ from typing import Optional
 
 import aiohttp
 
-logger = logging.getLogger(__name__)
+import config
 
-GEMINI_MODEL = "gemini-3.1-flash-lite"
-GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+logger = logging.getLogger(__name__)
 
 _MAX_ATTEMPTS = 3
 _INITIAL_BACKOFF = 1.0
@@ -35,8 +34,7 @@ class AIClient:
         if not self.api_key or not self.session:
             return None
 
-        # API key is passed as a query parameter per Google's REST convention, not a Bearer header
-        url = f"{GEMINI_API_URL}?key={self.api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{config.GEMINI_MODEL}:generateContent?key={self.api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"temperature": 0.2},
@@ -56,47 +54,43 @@ class AIClient:
                             ].strip()
                         except (KeyError, IndexError):
                             logger.warning(
-                                "Gemini response missing expected candidates (safety block?): %s",
-                                data,
+                                "Gemini response missing expected candidates: %s", data
                             )
                             return None
 
                     if (
-                        response.status in _RETRYABLE_STATUSES
-                        and attempt < _MAX_ATTEMPTS
+                        response.status not in _RETRYABLE_STATUSES
+                        or attempt == _MAX_ATTEMPTS
                     ):
-                        logger.warning(
-                            "Gemini %s on attempt %d/%d — retrying in %.1fs",
+                        logger.error(
+                            "Gemini API error %s: %s",
                             response.status,
-                            attempt,
-                            _MAX_ATTEMPTS,
-                            backoff,
+                            await response.text(),
                         )
-                        await asyncio.sleep(backoff)
-                        backoff *= 2
-                        continue
+                        return None
 
-                    logger.error(
-                        "Gemini API error %s: %s",
-                        response.status,
-                        await response.text(),
-                    )
-                    return None
-
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-                if attempt < _MAX_ATTEMPTS:
                     logger.warning(
-                        "Gemini network error on attempt %d/%d (%s) — retrying in %.1fs",
+                        "Gemini %s on attempt %d/%d — retrying in %.1fs",
+                        response.status,
                         attempt,
                         _MAX_ATTEMPTS,
-                        e,
                         backoff,
                     )
-                    await asyncio.sleep(backoff)
-                    backoff *= 2
-                    continue
-                logger.error("Gemini network error on final attempt: %s", e)
-                return None
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                if attempt == _MAX_ATTEMPTS:
+                    logger.error("Gemini network error on final attempt: %s", e)
+                    return None
+
+                logger.warning(
+                    "Gemini network error on attempt %d/%d (%s) — retrying in %.1fs",
+                    attempt,
+                    _MAX_ATTEMPTS,
+                    e,
+                    backoff,
+                )
+
+            await asyncio.sleep(backoff)
+            backoff *= 2
 
         return None
 

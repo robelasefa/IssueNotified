@@ -16,6 +16,7 @@ except ValueError:
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 # Azure App Service persists /home across container restarts; fall back to local data/ otherwise.
 DATA_DIR = Path("/home/data") if os.getenv("WEBSITE_INSTANCE_ID") else Path("data")
@@ -31,3 +32,4 @@ if not WEBHOOK_SECRET:
 
 PORT = int(os.getenv("PORT", "8443"))
 MAX_REPOS_PER_USER = int(os.getenv("MAX_REPOS_PER_USER", "5"))
+GITHUB_POLL_INTERVAL = int(os.getenv("GITHUB_POLL_INTERVAL", "5")) * 60

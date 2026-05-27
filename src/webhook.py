@@ -1,7 +1,8 @@
 import asyncio
-import hashlib
 import logging
 import os
+import re
+import secrets
 import sys
 import time
 from collections import defaultdict, deque
@@ -38,6 +39,7 @@ from config import (
     BOT_TOKEN,
     DEBUG,
     DEV_BOT_TOKEN,
+    GITHUB_POLL_INTERVAL,
     WEBHOOK_BASE_URL,
     WEBHOOK_SECRET,
 )
@@ -84,7 +86,9 @@ def _build_ptb_app(token: str) -> Application:
     app.add_error_handler(error_handler)
 
     if app.job_queue:
-        app.job_queue.run_repeating(poll_repositories, interval=300, first=10)
+        app.job_queue.run_repeating(
+            poll_repositories, interval=GITHUB_POLL_INTERVAL, first=10
+        )
 
     return app
 
@@ -115,17 +119,14 @@ async def _set_bot_commands(bot: Bot) -> None:
             logger.error("Error setting admin commands: %s", e)
 
 
-def _generate_telegram_secret(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
 @asynccontextmanager
 async def lifespan(fastapi_app: FastAPI):
     token = _get_token()
     ptb_app = _build_ptb_app(token)
 
     fastapi_app.state.ptb_app = ptb_app
-    fastapi_app.state.telegram_secret = _generate_telegram_secret(token)
+    # Sanitize WEBHOOK_SECRET for Telegram's allowed character set [a-zA-Z0-9_-]
+    fastapi_app.state.telegram_secret = re.sub(r"[^a-zA-Z0-9_-]", "_", WEBHOOK_SECRET)
 
     github_token = os.getenv("GITHUB_TOKEN")
     if github_token:
@@ -190,10 +191,8 @@ async def _rate_limit(request: Request, call_next):
 
 @app.post("/telegram")
 async def telegram_webhook(request: Request):
-    if (
-        request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-        != request.app.state.telegram_secret
-    ):
+    incoming_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not secrets.compare_digest(incoming_secret, request.app.state.telegram_secret):
         raise HTTPException(status_code=403, detail="Invalid secret token")
 
     data = await request.json()
