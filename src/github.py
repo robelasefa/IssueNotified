@@ -80,9 +80,6 @@ class GitHubClient:
         ]
 
     async def get_issues(self, owner: str, repo: str, since: str = None) -> List[Dict]:
-        # Fetch issues updated after `since` (ISO 8601 UTC), or all issues if
-        #  since is None. Uses state=all so both open and closed are returned.
-        #  filters out pull requests, which GitHub's /issues endpoint includes.
         params: Dict[str, str] = {
             "state": "all",
             "sort": "updated",
@@ -159,7 +156,10 @@ def _format_time_message(timestamp: str) -> str:
         else:
             relative = "just now"
 
-        return f"🕐 {dt.strftime('%Y-%m-%d %I:%M %p UTC')} ({relative})\n"
+        formatted = (
+            f"{dt.strftime('%b')} {dt.day}, {dt.year} • {dt.strftime('%I:%M %p')}"
+        )
+        return f"⏱️ {formatted}  ({relative})"
     except ValueError:
         return ""
 

@@ -30,6 +30,7 @@ def format_notification(owner: str, repo: str, issue: dict) -> str:
 
     if time_msg and "Unknown" not in time_msg:
         lines.append(time_msg)
+        lines.append("")
 
     meta = []
     if tags:
@@ -37,13 +38,14 @@ def format_notification(owner: str, repo: str, issue: dict) -> str:
     if assignee:
         meta.append(f"👤 @{assignee}")
     if meta:
-        lines += ["", "  ".join(meta)]
+        lines.append("  ".join(meta))
+        lines.append("")
 
     if ai_summary:
-        lines += ["", "✨ *AI Summary:*", f"_{ai_summary}_"]
+        lines += ["✨ *AI Summary:*", f"_{ai_summary}_"]
     elif description:
         excerpt = description[:280] + ("..." if len(description) > 280 else "")
-        lines += ["", f"_{excerpt}_"]
+        lines.append(f"_{excerpt}_")
 
     return "\n".join(lines)
 
