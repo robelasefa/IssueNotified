@@ -68,25 +68,25 @@ async def poll_repositories(context: ContextTypes.DEFAULT_TYPE) -> None:
         subscribers = repo["subscribers"]
         last_checked_at = repo.get("last_checked_at")  # ISO 8601 string or None
 
+        is_first_poll = last_checked_at is None
+
         logger.debug("Polling %s/%s (since=%s)", owner, name, last_checked_at)
 
         current = await github_client.get_issues_snapshot(
             owner, name, since=last_checked_at
         )
 
-        # `current` being empty is legitimate when no issues exist or none were
-        # updated since the last check — still update last_checked_at so the
-        # next poll uses the correct window. Do NOT skip with `continue` here;
-        # a silent skip would also hide 422 errors from malformed `since` values.
+        # Do NOT skip when current is empty — an empty result is legitimate
+        #  (nothing changed since last check). Skipping would also mask a 422
+        #  from a malformed `since` value and freeze last_checked_at permanently.
         stored = db.get_tracked_issues_for_repo(repo_id)
 
         for issue_id, issue in current.items():
-            current_state = issue["state"]  # 'open' or 'closed'
+            current_state = issue["state"]
             stored_state = stored.get(issue_id)
 
             if stored_state is None:
-                # First time we've seen this issue → notify as opened
-                event_type = "opened"
+                # Record the issue in the DB regardless of whether we notify.
                 db.add_tracked_issue(
                     issue_id=issue_id,
                     repository_id=repo_id,
@@ -94,6 +94,14 @@ async def poll_repositories(context: ContextTypes.DEFAULT_TYPE) -> None:
                     url=issue.get("url", ""),
                     state=current_state,
                 )
+                if is_first_poll:
+                    # Silently snapshot all pre-existing issues so the user
+                    #  isn't flooded with old notifications when they first
+                    #  track a repository. Only issues that appear AFTER this
+                    #  initial sweep will trigger a notification.
+                    continue
+                event_type = "opened"
+
             elif stored_state == "open" and current_state == "closed":
                 event_type = "closed"
                 db.update_issue_state(issue_id, "closed")
@@ -108,14 +116,7 @@ async def poll_repositories(context: ContextTypes.DEFAULT_TYPE) -> None:
             await _notify_subscribers(context, subscribers, payload, owner, name)
 
             logger.info(
-                "Notified: %s %s/%s#%s",
-                event_type,
-                owner,
-                name,
-                issue.get("number"),
+                "Notified: %s %s/%s#%s", event_type, owner, name, issue.get("number")
             )
 
-        # Update after every poll regardless of whether issues were found.
-        # This advances the `since` window so the next cycle only fetches
-        # issues updated after this moment.
         db.update_repository_last_checked(repo_id)

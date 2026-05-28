@@ -80,6 +80,9 @@ class GitHubClient:
         ]
 
     async def get_issues(self, owner: str, repo: str, since: str = None) -> List[Dict]:
+        # Fetch issues updated after `since` (ISO 8601 UTC), or all issues if
+        #  since is None. Uses state=all so both open and closed are returned.
+        #  filters out pull requests, which GitHub's /issues endpoint includes.
         params: Dict[str, str] = {
             "state": "all",
             "sort": "updated",
@@ -109,7 +112,7 @@ def _parse_issue(issue: Dict) -> Dict[str, Any]:
         "number": issue.get("number"),
         "title": issue.get("title", "No Title"),
         "url": issue.get("html_url", ""),
-        "state": issue.get("state", "open"),  # 'open' or 'closed'
+        "state": issue.get("state", "open"),
         "description": issue.get("body") or "",
         "tags": [label["name"] for label in issue.get("labels", [])],
         "assignee": assignees[0]["login"] if assignees else None,
@@ -138,7 +141,13 @@ def _format_time_message(timestamp: str) -> str:
         )
         secs = int((datetime.now(timezone.utc) - dt).total_seconds())
 
-        if secs >= 86400:
+        if secs >= 365 * 86400:
+            y = secs // (365 * 86400)
+            relative = f"{y} year{'s' if y > 1 else ''} ago"
+        elif secs >= 30 * 86400:
+            mo = secs // (30 * 86400)
+            relative = f"{mo} month{'s' if mo > 1 else ''} ago"
+        elif secs >= 86400:
             d = secs // 86400
             relative = f"{d} day{'s' if d > 1 else ''} ago"
         elif secs >= 3600:
